@@ -14,7 +14,7 @@
 
 ## In Progress
 
-- T008a 完成：sync --conformance（fixture 六包 → assets/conf-ui、src/cases 拷贝进 conf-src 并重写 lgui 别名 ×30）。待 T008b：Boot 的 ?conf= 模式 + __confRun 桥（conf-ui 第二 bundle、confDesign、testing.start 接线）（`lgui-cocos-mcp/testbed/`：package.json/settings/tsconfig 抄自 fork demo；`sync.mjs` 灌界面包+翻译+框架副本+生成 lgui-config；`Boot.ts` 桥接冒烟）。校准点 7（i18n）已在代码里消除——setLanguage 改走 bundle TextAsset。**待办：在 Creator 3.8.2 里实际打开（本机已装），设 lgui-ui 为 bundle、场景挂 LGUIBoot、跑预览**，然后按[校准清单](evidence/2026-11-07-t005-cocos-backend-skeleton.md)逐条核对；五层栈/换版 swap 等测试 View 接入。
+- T008a 完成：sync --conformance（fixture 六包 → assets/conf-ui、src/cases 拷贝进 conf-src 并重写 lgui 别名 ×30）。T008b 完成：ConformanceBoot 桥通了（?conf= 模式、conf-ui bundle、__confRun、15 用例注册、场景 launch 等待）。**首个真实发现：binding-language 在 cocos 上报 LGUI-RT-062——Main/MainView 绑定表的 status 在二进制组件里找不到（headless/h5 正常）**，待查：projectType(0) 二进制里控制器在不在（对照 web 格式）vs 包装层 getController。（`lgui-cocos-mcp/testbed/`：package.json/settings/tsconfig 抄自 fork demo；`sync.mjs` 灌界面包+翻译+框架副本+生成 lgui-config；`Boot.ts` 桥接冒烟）。校准点 7（i18n）已在代码里消除——setLanguage 改走 bundle TextAsset。**待办：在 Creator 3.8.2 里实际打开（本机已装），设 lgui-ui 为 bundle、场景挂 LGUIBoot、跑预览**，然后按[校准清单](evidence/2026-11-07-t005-cocos-backend-skeleton.md)逐条核对；五层栈/换版 swap 等测试 View 接入。
 
 ## Next
 

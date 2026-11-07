@@ -2,8 +2,8 @@
   "ver": "1.2.0",
   "importer": "directory",
   "imported": true,
-  "uuid": "ad395d19-245a-4ba7-ada3-3b149bd554f8",
+  "uuid": "8a4c2f7e-1b3d-49a6-b8e0-5c7d9a2f4e8b",
   "files": [],
   "subMetas": {},
-  "userData": {}
+  "userData": {"isBundle": true, "bundleName": "conf-ui"}
 }

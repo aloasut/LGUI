@@ -43,7 +43,7 @@ export async function smoke(): Promise<void> {
 
 // 不依赖场景挂件：第一个场景加载完自动跑冒烟。只在预览/构建里跑——
 // 编辑器 Scene 进程里 bundle 与场景时序都不可靠（用户重开工程时的报错即此），EDITOR 守卫跳过。
-if (!EDITOR) director.once(Director.EVENT_AFTER_SCENE_LAUNCH, () => {
+if (!EDITOR && !new URL(location.href).searchParams.get('conf')) director.once(Director.EVENT_AFTER_SCENE_LAUNCH, () => {
   // 失败只进控制台，不 rethrow——rethrow 会在预览里弹全屏 Error 遮罩，把页面锁死。
   void smoke().catch(error => console.error('[lgui-smoke] 失败：', error));
 });
