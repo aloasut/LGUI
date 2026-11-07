@@ -76,6 +76,18 @@ export class Node {
   getComponent<T extends new (...args: never[]) => Component>(type: T): InstanceType<T> | null;
 }
 
+export const Layers: {Enum: {UI_2D: number}};
+
+export class Camera extends Component {
+  projection: number;
+  clearFlags: number;
+  orthoHeight: number;
+  visibility: number;
+  priority: number;
+  static Projection: {ORTHO: number};
+  static ClearFlag: {SOLID_COLOR: number};
+}
+
 export class Component {
   node: Node;
   /** 每帧调用（组件激活时）。 */

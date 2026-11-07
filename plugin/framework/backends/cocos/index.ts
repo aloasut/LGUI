@@ -1,6 +1,6 @@
 // cocos 后端：fairygui-cc 加 Cocos Creator 引擎 API。从 h5 后端移植（它是基准实现）；差异点都在注释里。
 // 只能在 Cocos Creator 工程里运行（fairygui.mjs import 'cc'）；M1 目标是 Web。
-import {Canvas, director, TextAsset} from 'cc';
+import {Camera, Canvas, director, Layers, Node, TextAsset} from 'cc';
 import * as fgui from 'fairygui-cc';
 import type {Backend, BackendConfig, Platform, UIComponent, UIObject} from '../../core/index';
 import {LgRuntimeError} from '../../core/index';
@@ -24,12 +24,23 @@ export function createCocosBackend(): Backend {
       if (platform) return; // 幂等：编辑器/预览/一致性桥可能多次调 init，二次调用直接返回
       if (config.defaultFont) fgui.UIConfig.defaultFont = config.defaultFont;
       i18nBase = config.i18nBase;
-      // 运行库的 GRoot.create() 会把根节点挂到「名为 Canvas 的直接子节点」上——名字硬编码。
-      // 这里自己复刻它的挂载（_inst 赋值 + addChild + onWinResize），Canvas 按优先级找：
-      // 直接子节点 Canvas → 场景里任何挂了 cc.Canvas 的节点；都没有才报 LGUI-RT-028（报当前场景名）。
+      // 挂载：复刻运行库 GRoot.create() 的三步（_inst 赋值 + 挂到 Canvas + onWinResize），但不认名字——
+      // 优先用场景里现成的 Canvas（直接子节点名为 Canvas → 任何挂了 cc.Canvas 的节点），都没有就自动建一套（Canvas + 正交相机）。
       const scene = director.getScene();
-      const canvas = scene?.getChildByName('Canvas') ?? scene?.getComponentsInChildren(Canvas)[0]?.node ?? null;
-      if (!scene || !canvas) throw new LgRuntimeError('LGUI-RT-028', `界面根节点挂不上去：当前场景「${scene?.name ?? '（无）'}」里没有 Canvas。`, '打开带 Canvas 的场景（比如 testbed 的 main.scene），或在场景里加一个挂了 cc.Canvas 的节点，再预览。');
+      if (!scene) throw new LgRuntimeError('LGUI-RT-028', '界面根节点挂不上去：场景还没就绪。', '在场景加载完成后再调用 lgui.app()。');
+      let canvas = scene.getChildByName('Canvas') ?? scene.getComponentsInChildren(Canvas)[0]?.node ?? null;
+      if (!canvas) {
+        canvas = new Node('Canvas');
+        scene.addChild(canvas);
+        canvas.addComponent(Canvas);
+        const camNode = new Node('Camera');
+        canvas.addChild(camNode);
+        const cam = camNode.addComponent(Camera);
+        cam.projection = Camera.Projection.ORTHO;
+        cam.clearFlags = Camera.ClearFlag.SOLID_COLOR;
+        cam.visibility = Layers.Enum.UI_2D;
+        cam.orthoHeight = 540; // 半屏高默认值；对齐由 onWinResize/Canvas 组件接管
+      }
       const nativeRoot = new fgui.GRoot();
       (fgui.GRoot as unknown as {_inst: fgui.GRoot})._inst = nativeRoot;
       canvas.addChild(nativeRoot.node);
