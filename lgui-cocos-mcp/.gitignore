@@ -20,3 +20,7 @@ testbed/library/
 testbed/temp/
 testbed/profiles/
 testbed/extensions/
+
+# T008 conformance 产物（sync.mjs --conformance 产出）
+testbed/assets/conf-ui/
+testbed/assets/conf-src/

@@ -50,3 +50,34 @@ export const texts = ${JSON.stringify(texts, null, 2)};
 `;
 fs.writeFileSync(path.join(testbed, 'assets', 'scripts', 'lgui-config.ts'), generated);
 console.log('启动配置：assets/scripts/lgui-config.ts');
+
+// ---- conformance 模式（node sync.mjs --conformance）：fixture UI 与用例进 testbed，供 T008 四方快照 ----
+if (process.argv.includes('--conformance')) {
+  const {conformanceProject} = await import(pathToFileURL(path.join(repo, 'tests', 'conformance', 'runner.mjs')));
+  const ctx = await conformanceProject();
+  const confUi = path.join(testbed, 'assets', 'conf-ui');
+  await generateCocos(uiProjectPath(ctx.root), confUi);
+  console.log(`conf 界面包：→ assets/conf-ui/`);
+  // src/conformance 拷进 assets/conf-src/，'lgui' 别名重写为相对路径（CC 工程没有 esbuild alias）。
+  const confSrc = path.join(testbed, 'assets', 'conf-src');
+  fs.rmSync(confSrc, {recursive: true, force: true});
+  for (const part of ['src', 'conformance']) {
+    fs.cpSync(path.join(ctx.root, part), path.join(confSrc, part), {recursive: true, filter: src => !src.includes('node_modules') && !src.endsWith('.sym')});
+  }
+  let rewritten = 0;
+  const walk = dir => {
+    for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walk(full); continue; }
+      if (!entry.name.endsWith('.ts')) continue;
+      const text = fs.readFileSync(full, 'utf8');
+      const next = text
+        .replace(/from 'lgui'/g, "from '../../lgui-framework/index'")
+        .replace(/from '(\.\.\/)+src\//g, m => `from '${'../'.repeat(m.split('../').length - 1)}../`.replace(/\/\.\.$/, '/../') + '');
+      if (next !== text) { fs.writeFileSync(full, next); rewritten++; }
+    }
+  };
+  walk(confSrc);
+  console.log(`conf 源码：assets/conf-src/（重写 ${rewritten} 个文件的 lgui 别名）`);
+  console.log('注意：conformance 工程的 designSize 不同于 inventory，conf 模式页面要按它 applyDesignSize（Boot 里读 lgui-config 的 confDesign）。');
+}
