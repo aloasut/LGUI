@@ -70,6 +70,8 @@ export class Node {
   readonly worldScale: Vec3;
   /** 按名字找直接子节点（GRoot.create 挂 Canvas 前的预检查用）。 */
   getChildByName(name: string): Node | null;
+  /** 递归找挂了某组件的节点（Canvas 名字不叫 Canvas 时的兜底查找）。 */
+  getComponentsInChildren<T extends new (...args: never[]) => Component>(type: T): InstanceType<T>[];
   addComponent<T extends new (...args: never[]) => Component>(type: T): InstanceType<T>;
   getComponent<T extends new (...args: never[]) => Component>(type: T): InstanceType<T> | null;
 }
@@ -83,6 +85,9 @@ export class Component {
 }
 
 export class Scene extends Node {}
+
+/** UI 根组件：2D 渲染入口（挂它的节点就是 UI Canvas）。 */
+export class Canvas extends Component {}
 
 /** 引擎全局事件（切后台/回前台）。 */
 export class Game {

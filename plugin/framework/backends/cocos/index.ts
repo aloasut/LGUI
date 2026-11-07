@@ -1,6 +1,6 @@
 // cocos 后端：fairygui-cc 加 Cocos Creator 引擎 API。从 h5 后端移植（它是基准实现）；差异点都在注释里。
 // 只能在 Cocos Creator 工程里运行（fairygui.mjs import 'cc'）；M1 目标是 Web。
-import {director, TextAsset} from 'cc';
+import {Canvas, director, TextAsset} from 'cc';
 import * as fgui from 'fairygui-cc';
 import type {Backend, BackendConfig, Platform, UIComponent, UIObject} from '../../core/index';
 import {LgRuntimeError} from '../../core/index';
@@ -23,10 +23,16 @@ export function createCocosBackend(): Backend {
     async init(config: BackendConfig) {
       if (config.defaultFont) fgui.UIConfig.defaultFont = config.defaultFont;
       i18nBase = config.i18nBase;
-      // GRoot.create() 是运行库的唯一初始化入口（InputProcessor、缩放器都在里面），它挂到场景里名为 Canvas 的节点——CC 的 UI 场景约定就有 Canvas。
+      // 运行库的 GRoot.create() 会把根节点挂到「名为 Canvas 的直接子节点」上——名字硬编码。
+      // 这里自己复刻它的挂载（_inst 赋值 + addChild + onWinResize），Canvas 按优先级找：
+      // 直接子节点 Canvas → 场景里任何挂了 cc.Canvas 的节点；都没有才报 LGUI-RT-028（报当前场景名）。
       const scene = director.getScene();
-      if (!scene || !scene.getChildByName('Canvas')) throw new LgRuntimeError('LGUI-RT-028', '界面根节点挂不上去：场景里没有名为 Canvas 的节点。', '在场景根下建一个 Canvas 节点（CC 的 UI 场景默认就有），再调用 lgui.app()。');
-      const nativeRoot = fgui.GRoot.create();
+      const canvas = scene?.getChildByName('Canvas') ?? scene?.getComponentsInChildren(Canvas)[0]?.node ?? null;
+      if (!scene || !canvas) throw new LgRuntimeError('LGUI-RT-028', `界面根节点挂不上去：当前场景「${scene?.name ?? '（无）'}」里没有 Canvas。`, '打开带 Canvas 的场景（比如 testbed 的 main.scene），或在场景里加一个挂了 cc.Canvas 的节点，再预览。');
+      const nativeRoot = new fgui.GRoot();
+      (fgui.GRoot as unknown as {_inst: fgui.GRoot})._inst = nativeRoot;
+      canvas.addChild(nativeRoot.node);
+      nativeRoot.onWinResize();
       if (!nativeRoot.node.parent) {
         const scene = director.getScene();
         if (!scene) throw new LgRuntimeError('LGUI-RT-028', '界面根节点挂不上去：场景还没就绪。', '在场景加载完成后再调用 lgui.app()。');

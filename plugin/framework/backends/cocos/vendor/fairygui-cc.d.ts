@@ -118,6 +118,8 @@ export class GComponent extends GObject {
 export class GRoot extends GComponent {
   static readonly inst: GRoot;
   static create(): GRoot;
+  /** 按当前窗口重排根节点尺寸/缩放（手动挂载流程里替代 create 调它）。 */
+  onWinResize(): void;
   readonly inputProcessor: {owner: GRoot};
   getTouchPosition(touchId?: number): {x: number; y: number};
 }
