@@ -14,4 +14,4 @@ import * as c11 from '../conf-src/conformance/cases/stack-keys';
 import * as c12 from '../conf-src/conformance/cases/tree';
 import * as c13 from '../conf-src/conformance/cases/wheel';
 import * as c14 from '../conf-src/conformance/cases/wheel-delta';
-export const cases: Record<string, typeof c0> = {"binding-language": c0, "combobox": c1, "disabled": c2, "drag-drop": c3, "gear-group": c4, "gear-tabs": c5, "gestures": c6, "input": c7, "label-movieclip": c8, "list-rotate": c9, "slider": c10, "stack-keys": c11, "tree": c12, "wheel": c13, "wheel-delta": c14};
+export const cases = {"binding-language": c0.default, "combobox": c1.default, "disabled": c2.default, "drag-drop": c3.default, "gear-group": c4.default, "gear-tabs": c5.default, "gestures": c6.default, "input": c7.default, "label-movieclip": c8.default, "list-rotate": c9.default, "slider": c10.default, "stack-keys": c11.default, "tree": c12.default, "wheel": c13.default, "wheel-delta": c14.default};

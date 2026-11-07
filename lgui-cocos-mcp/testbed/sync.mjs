@@ -94,6 +94,7 @@ if (process.argv.includes('--conformance')) {
   const caseEntries = caseNames.map((n, i) => JSON.stringify(n) + ': c' + i + '.default');
   const caseMap = 'export const cases = {' + caseEntries.join(', ') + '};';
   fs.writeFileSync(path.join(testbed, 'assets', 'scripts', 'conf-config.ts'), `// 由 sync.mjs 生成，不要手改。\nexport const conf = ${JSON.stringify(confConfig, null, 2)};\n`);
+  fs.writeFileSync(path.join(testbed, 'assets', 'scripts', 'conf-cases.ts'), `// 由 sync.mjs 生成，不要手改。\n${caseImports}\n${caseMap}\n`);
   console.log(`conf 配置：conf-config.ts + conf-cases.ts（${caseNames.length} 个用例）`);
   console.log('注意：conformance 工程的 designSize 不同于 inventory，conf 模式页面要按它 applyDesignSize（Boot 里读 lgui-config 的 confDesign）。');
 }
