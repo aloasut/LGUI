@@ -41,19 +41,21 @@ class FrameDriver extends Component {
   override update(dt: number): void { this.onFrame?.(dt * 1000); }
 }
 
-// 包加载走的 bundle 名与目录（decisions/003）：assets/lgui-ui/<包名>/。
-const bundleName = 'lgui-ui';
+// 包加载走的 bundle 名与目录（decisions/003）：uiBase 即 bundle 名（默认 lgui-ui），目录 assets/<bundle>/<包名>/。
 let bundle: AssetManagerBundle | null = null;
-export const bundleReady = (): Promise<AssetManagerBundle> => new Promise((resolve, reject) => {
-  if (bundle) { resolve(bundle); return; }
+export const bundleReady = (bundleName: string): Promise<AssetManagerBundle> => new Promise((resolve, reject) => {
+  const existing = assetManager.bundles?.get?.(bundleName);
+  if (bundle && bundle.name === bundleName) { resolve(bundle); return; }
+  if (existing) { bundle = existing; resolve(existing); return; }
   assetManager.loadBundle(bundleName, (error, loaded) => {
-    if (error) { reject(new LgRuntimeError('LGUI-RT-011', `读不到界面包 bundle ${bundleName}（${error.message}）。`, '先运行包同步把 ui/ 的产物放进 Cocos 工程的 assets/lgui-ui/，并把该目录设为 bundle。')); return; }
+    if (error) { reject(new LgRuntimeError('LGUI-RT-011', `读不到界面包 bundle ${bundleName}（${error.message}）。`, '确认该目录已设为 bundle，且先运行包同步生成产物。')); return; }
     bundle = loaded;
     resolve(loaded);
   });
 });
 
 export function createCocosPlatform(projectName: string, uiBase: string): Platform {
+  const bundleName = uiBase || 'lgui-ui';
   const frame = new Handlers<number>();
   const visibility = new Handlers<boolean>();
   const pointer = new Handlers<PointerInput>();
@@ -64,7 +66,6 @@ export function createCocosPlatform(projectName: string, uiBase: string): Platfo
   const unlockAudio = (): void => audio.unlock(); // 第一次点击或按键时解锁声音
   installImeTracking();
   const root = fgui.GRoot.inst;
-  void uiBase; // 播放地址都从 ui:// 包里来；uiBase 留给 T007 的散图对齐确认
 
   // 每帧：一个回调出错不影响别的回调，也不会让以后的帧停掉（定时器、lgui.time.wait、请求超时、旋转换版都靠它）。
   const driver = root.node.addComponent(FrameDriver);
@@ -114,7 +115,7 @@ export function createCocosPlatform(projectName: string, uiBase: string): Platfo
     resource: {
       loadPackage: async name => {
         if (fgui.UIPackage.getByName(name)) return;
-        const loaded = await bundleReady();
+        const loaded = await bundleReady(bundleName);
         // 路径约定：<包名>/<包名>.bin（decisions/003）。运行库拿 path 直接 bundle.load；
         // Raw Asset（.bytes）按 CC 文档要带扩展名，老版本资源库不带——两种都试，全失败才报错（错误里带上两种路径）。
         const withExt = `${name}/${name}.bin`;

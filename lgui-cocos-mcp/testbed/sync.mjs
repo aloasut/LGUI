@@ -90,9 +90,9 @@ if (process.argv.includes('--conformance')) {
   const confConfig = {defaultFont: null, name: ctx.project.name, designSize: ctx.project.designSize, orientation: ctx.project.orientation, languages: ctx.project.languages, defaultLanguage: ctx.project.defaultLanguage, keyMap: {}, deps: ctx.deps, texts: ctx.texts};
   // conf-cases：静态导入每个用例（CC 的 packer 不支持动态 import 变量）。
   const caseNames = fs.readdirSync(path.join(confSrc, 'conformance', 'cases')).filter(f => f.endsWith('.ts')).map(f => f.slice(0, -3)).sort();
-  const caseImports = caseNames.map((n, i) => `import * as c${i} from '../conf-src/conformance/cases/${n}';`).join('\n');
-  const caseMap = `export const cases: Record<string, typeof c0> = {${caseNames.map((n, i) => `${JSON.stringify(n)}: c${i}`).join(', ')}};`;
-  fs.writeFileSync(path.join(testbed, 'assets', 'scripts', 'conf-cases.ts'), `// 由 sync.mjs 生成，不要手改。\n${caseImports}\n${caseMap}\n`);
+  const caseImports = caseNames.map((n, i) => 'import * as c' + i + " from '../conf-src/conformance/cases/" + n + "';").join('\n');
+  const caseEntries = caseNames.map((n, i) => JSON.stringify(n) + ': c' + i + '.default');
+  const caseMap = 'export const cases = {' + caseEntries.join(', ') + '};';
   fs.writeFileSync(path.join(testbed, 'assets', 'scripts', 'conf-config.ts'), `// 由 sync.mjs 生成，不要手改。\nexport const conf = ${JSON.stringify(confConfig, null, 2)};\n`);
   console.log(`conf 配置：conf-config.ts + conf-cases.ts（${caseNames.length} 个用例）`);
   console.log('注意：conformance 工程的 designSize 不同于 inventory，conf 模式页面要按它 applyDesignSize（Boot 里读 lgui-config 的 confDesign）。');
