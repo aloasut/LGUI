@@ -484,7 +484,10 @@ export class UIManager {
         entry.view.__dispose();
         entry.component?.dispose();
         abandon();
-        throw new LgRuntimeError('LGUI-RT-080', `打开 ${cls.name} 失败：${error instanceof Error ? error.message : String(error)}`, '按报错改；不会显示打开了一半的界面。');
+        const wrapped = new LgRuntimeError('LGUI-RT-080', `打开 ${cls.name} 失败：${error instanceof Error ? error.message : String(error)}`, '按报错改；不会显示打开了一半的界面。');
+        // 内层栈挂在 innerStack 上：RT-080 的栈是包装点，真正出错的那帧在里面（诊断用，不属于错误码语义）。
+        if (error instanceof Error) (wrapped as unknown as {innerStack?: string}).innerStack = error.stack;
+        throw wrapped;
       }
       return view;
     })();

@@ -90,6 +90,31 @@ try {
     page.on('pageerror', e => errors.push(String(e.message ?? e)));
     page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
     const result = {name, status: 'PASS'};
+    // __pw：页面把控件中心换算成页面像素后，从这里派发真实输入（ConformanceBoot 的输入位）。
+    await page.exposeFunction('__pw', async (op, ...a) => {
+      const cdp = await page.context().newCDPSession(page);
+      if (op === 'press') {
+        await page.mouse.move(a[0], a[1]);
+        await cdp.send('Input.synthesizeTapGesture', {x: a[0], y: a[1], duration: a[2], gestureSourceType: a[3] === 'touch' ? 'touch' : 'mouse'});
+      }
+      else if (op === 'touchPath') {
+        const [x0, y0, x1, y1, ms, steps] = a;
+        const touch = (type, px, py) => cdp.send('Input.dispatchTouchEvent', {type, touchPoints: type === 'touchEnd' ? [] : [{x: px, y: py, id: 1}]});
+        const sleep = t => new Promise(resolve => setTimeout(resolve, t));
+        await touch('touchStart', x0, y0);
+        await sleep(ms / steps);
+        for (let i = 1; i <= steps; i++) {
+          const k = i / steps;
+          await touch('touchMove', x0 + (x1 - x0) * k, y0 + (y1 - y0) * k);
+          if (i < steps) await sleep(ms / steps);
+        }
+        await touch('touchEnd');
+      }
+      else if (op === 'wheel') { await page.mouse.move(a[0], a[1]); await page.mouse.wheel(0, a[2]); }
+      else if (op === 'key') await page.keyboard.press(a[0]);
+      else if (op === 'viewport') await page.setViewportSize({width: a[0], height: a[1]});
+      else throw new Error(`未知操作 ${op}`);
+    });
     try {
       await page.goto(`${base}/index.html?conf=1`);
       await withTimeout(page.waitForFunction(() => window.__confCases, null, {timeout: 30000}), 35000, 'cocos 页面就绪');

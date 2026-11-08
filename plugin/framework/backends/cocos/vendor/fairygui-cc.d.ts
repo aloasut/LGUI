@@ -12,7 +12,7 @@ export interface FguiColor {
   b: number;
 }
 
-export class FguiRect {
+export class Rect {
   constructor(x?: number, y?: number, width?: number, height?: number);
   x: number;
   y: number;
@@ -220,7 +220,7 @@ export class ScrollPane {
   posY: number;
   setPosX(value: number, ani?: boolean): void;
   setPosY(value: number, ani?: boolean): void;
-  scrollToView(rect: FguiRect, ani?: boolean, setFirst?: boolean): void;
+  scrollToView(rect: Rect, ani?: boolean, setFirst?: boolean): void;
 }
 
 /** Controller 继承 cc 的 EventTarget；本后端只用 on/off 订阅 status_changed，回调不读事件内容。 */

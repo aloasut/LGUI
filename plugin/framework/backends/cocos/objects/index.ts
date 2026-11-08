@@ -1,5 +1,6 @@
 // 把 fairygui-cc 的对象包成接口层的 UI 对象。每个对象只包一次（WeakMap 缓存），事件一律返回取消函数。
 // 从 h5 的 objects/index.ts 移植；差异都在注释里标了。
+import {Rect as CcRect} from 'cc';
 import * as fgui from 'fairygui-cc';
 import type {
   PointerInput, Rect, UIObject, UIComponent, UIText, UIInput, UIButton, UIImage, UILoader, UIList, UIController, UITransition, UIProgress, UIGraph, Unsubscribe,
@@ -203,7 +204,7 @@ class CocosList extends CocosObject implements UIList {
     this.native.setVirtual();
   }
   get scrollPosition(): {x: number; y: number} { const pane = this.native.scrollPane; return {x: pane?.posX ?? 0, y: pane?.posY ?? 0}; }
-  set scrollPosition(value: {x: number; y: number}) { this.native.scrollPane?.scrollToView(new fgui.FguiRect(value.x, value.y, 0, 0), false, true); }
+  set scrollPosition(value: {x: number; y: number}) { this.native.scrollPane?.scrollToView(new CcRect(value.x, value.y, 0, 0), false, true); }
   // 选中项自己记一份：FairyGUI 只把按钮类型的子项当成可选中的，非按钮子项的选中会丢（同 h5，与 headless 一致）。
   private selected = -1;
   get selectedIndex(): number { return this.selected; }
