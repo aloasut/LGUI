@@ -66,6 +66,10 @@ export function createCocosPlatform(projectName: string, uiBase: string): Platfo
   const unlockAudio = (): void => audio.unlock(); // 第一次点击或按键时解锁声音
   installImeTracking();
   const root = fgui.GRoot.inst;
+  // 这个后端自己加载过的界面包。FairyGUI 按包名全局注册（UIPackage.getByName），页面上别的来源
+  // （比如另一份 UI 产物的引导/冒烟代码）先加载了同名包的话，create 会拿到别家的组件——绑定层
+  // 就会报「组件里没有这个控件」（T008 的 LGUI-RT-062 就是这么来的）。所以加载时校验归属，报错不混用。
+  const ownPackages = new Set<string>();
 
   // 每帧：一个回调出错不影响别的回调，也不会让以后的帧停掉（定时器、lgui.time.wait、请求超时、旋转换版都靠它）。
   const driver = root.node.addComponent(FrameDriver);
@@ -114,7 +118,11 @@ export function createCocosPlatform(projectName: string, uiBase: string): Platfo
     },
     resource: {
       loadPackage: async name => {
-        if (fgui.UIPackage.getByName(name)) return;
+        if (fgui.UIPackage.getByName(name)) {
+          // 同名包已经在页面里，但不是这个后端加载的：多半是别的 UI 产物先加载了它。报出来，别静默当成「已加载」。
+          if (!ownPackages.has(name)) throw new LgRuntimeError('LGUI-RT-264', `界面包 ${name} 已经在页面里加载过了，但不是这个后端加载的（同名包来自别的 bundle 或来源，FairyGUI 按包名全局注册）。`, '一个页面只放一套 LGUI 的界面包：找出谁先加载了同名包（比如别的工程的引导或冒烟代码），别让两份 UI 产物进同一个页面。');
+          return;
+        }
         const loaded = await bundleReady(bundleName);
         // 路径约定：<包名>/<包名>.bin（decisions/003）。运行库拿 path 直接 bundle.load；
         // Raw Asset（.bytes）按 CC 文档要带扩展名，老版本资源库不带——两种都试，全失败才报错（错误里带上两种路径）。
@@ -132,8 +140,12 @@ export function createCocosPlatform(projectName: string, uiBase: string): Platfo
           } catch (error) { lastError = error instanceof Error ? error : new Error(String(error)); }
         }
         if (lastError) throw new LgRuntimeError('LGUI-RT-012', `界面包 ${name} 加载失败（${lastError.message}；试过 ${withExt} 和 ${withoutExt}）。`, '重新运行包同步，确认 assets/lgui-ui/ 里有这个包（.bin），并把 lgui-ui 目录设为 bundle。');
+        ownPackages.add(name);
       },
-      releasePackage: name => { if (fgui.UIPackage.getByName(name)) fgui.UIPackage.removePackage(name); },
+      releasePackage: name => {
+        ownPackages.delete(name);
+        if (fgui.UIPackage.getByName(name)) fgui.UIPackage.removePackage(name);
+      },
       hasPackage: name => fgui.UIPackage.getByName(name) !== undefined,
       loadImage: url => new Promise((resolve, reject) => {
         if (url.startsWith('ui://')) { resolve(); return; } // 包里的图，包加载后同步就绪

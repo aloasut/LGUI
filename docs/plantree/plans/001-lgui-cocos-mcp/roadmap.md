@@ -14,11 +14,12 @@
 
 ## In Progress
 
-- T008a 完成：sync --conformance（fixture 六包 → assets/conf-ui、src/cases 拷贝进 conf-src 并重写 lgui 别名 ×30）。T008b 完成：ConformanceBoot 桥通了（?conf= 模式、conf-ui bundle、__confRun、15 用例注册、场景 launch 等待）。**首个真实发现：binding-language 在 cocos 上报 LGUI-RT-062——Main/MainView 绑定表的 status 在二进制组件里找不到（headless/h5 正常）**，待查：projectType(0) 二进制里控制器在不在（对照 web 格式）vs 包装层 getController。（`lgui-cocos-mcp/testbed/`：package.json/settings/tsconfig 抄自 fork demo；`sync.mjs` 灌界面包+翻译+框架副本+生成 lgui-config；`Boot.ts` 桥接冒烟）。校准点 7（i18n）已在代码里消除——setLanguage 改走 bundle TextAsset。**待办：在 Creator 3.8.2 里实际打开（本机已装），设 lgui-ui 为 bundle、场景挂 LGUIBoot、跑预览**，然后按[校准清单](evidence/2026-11-07-t005-cocos-backend-skeleton.md)逐条核对；五层栈/换版 swap 等测试 View 接入。
+- T008a 完成：sync --conformance（fixture 六包 → assets/conf-ui、src/cases 拷贝进 conf-src 并重写 lgui 别名 ×30、conf-ui 翻译）。T008b 完成：ConformanceBoot 桥通了（?conf= 模式、conf-ui bundle、__confRun、15 用例注册、场景 launch 等待；Boot.ts 冒烟按 `?conf=` 跳过）。**RT-062 已破案**（[证据](evidence/2026-11-08-t008-rt062.md)）：不是绑定引擎或横竖版差异，是 FairyGUI 按包名全局注册——conf 页面早先被 inventory 冒烟先灌了 lgui-ui 的 `Main` 包，conf 的 `loadPackage('Main')` 静默吞掉同名包，create 出 inventory 版 MainView（无 status）→ 绑定层报 RT-062。Boot.ts 的 `?conf=` 跳过落地后已消失；引擎补了归属校验（同名外来包报 **LGUI-RT-264**，不再静默）。顺带修掉 setLanguage 回归（2e972c6 把翻译目录名 'i18n' 当 bundle 名 → LGUI-RT-011、冒烟页挂死）：改回从 uiBase bundle 读 `<i18nBase>/<语言>` TextAsset。验证：typecheck ok、单测 94/94、conf 页 binding-language 整例通过（英文快照与 headless 逐项对齐，唯一差异是 T008d 待接的输入驱动值 clicks）、冒烟页全绿。T008c 剩手动 runner（`tests/cocos/run-conformance.mjs`），T008d 接 CDP 输入位。
 
 ## Next
 
-- T008 conformance 四方快照：headless/h5/unity/cocos（桥的实现按 Q3）
+- T008c 手动 runner + 四方快照（headless/h5/unity/cocos，桥的实现按 Q3）
+- T008d 全用例输入位（CDP 合成触摸，方案见 topics/cocos-conformance.md 第 4 条）
 
 ## Deferred
 

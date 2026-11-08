@@ -12,6 +12,7 @@ const parseUrl = (url: string): [string, string] | null => { const m = /^ui:\/\/
 export function createCocosBackend(): Backend {
   let platform: Platform | null = null;
   let root: UIComponent | null = null;
+  let uiBase: string | undefined;
   let i18nBase: string | undefined;
   const loadedPackages = new Set<string>();
   const ready = (): Platform => {
@@ -23,6 +24,7 @@ export function createCocosBackend(): Backend {
     async init(config: BackendConfig) {
       if (platform) return; // 幂等：编辑器/预览/一致性桥可能多次调 init，二次调用直接返回
       if (config.defaultFont) fgui.UIConfig.defaultFont = config.defaultFont;
+      uiBase = config.uiBase;
       i18nBase = config.i18nBase;
       // 挂载：复刻运行库 GRoot.create() 的三步（_inst 赋值 + 挂到 Canvas + onWinResize），但不认名字——
       // 优先用场景里现成的 Canvas（直接子节点名为 Canvas → 任何挂了 cc.Canvas 的节点），都没有就自动建一套（Canvas + 正交相机）。
@@ -70,8 +72,9 @@ export function createCocosBackend(): Backend {
     },
     async setLanguage(language: string): Promise<void> {
       if (!i18nBase) throw new LgRuntimeError('LGUI-RT-173', `没配 i18nBase，换不了界面上固定文字的语言（${language}）。`, 'backend.init 时传 i18nBase（包同步生成的翻译目录，比如 i18n）。');
-      // 翻译文件在 lgui-ui bundle 里（assets/lgui-ui/i18n/<语言>.xml）；CC 的 bundle 资源 fetch 不到，用 bundle.load 读 TextAsset。
-      const uiBundle = await bundleReady(i18nBase || 'lgui-ui');
+      // 翻译文件在界面包 bundle 里（assets/<uiBase>/i18n/<语言>.xml）；CC 的 bundle 资源 fetch 不到，用 bundle.load 读 TextAsset。
+      // i18nBase 是 bundle 里的目录名（init 传 i18nBase: 'i18n'），不是 bundle 名——bundle 名跟包加载走同一个 uiBase。
+      const uiBundle = await bundleReady(uiBase || 'lgui-ui');
       const xml = await new Promise<string>((resolve, reject) => uiBundle.load(`${i18nBase}/${language}`, TextAsset, (error, asset) => {
         if (error || !asset) reject(new LgRuntimeError('LGUI-RT-141', `读不到翻译文件 ${i18nBase}/${language}（bundle 里没有）。`, '确认工程配置 languages 里有这种语言，并重新运行包同步生成翻译文件。'));
         else resolve((asset as TextAsset).text);

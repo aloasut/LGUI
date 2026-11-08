@@ -134,6 +134,7 @@ LGUI 的每条报错都带错误码，并写明：哪个文件哪一行（如果
 | `LGUI-RT-261` | 列表不能滚动（`ui/` 里没写 `overflow="scroll"`）却设成了虚拟列表（浏览器里 FairyGUI 报 `Virtual list must be scrollable!`，headless 照样报） | 要虚拟列表就给列表写 `overflow="scroll"`（不想显示滚动条再加 `scrollBar="hidden"`）；项数固定的短列表不用虚拟列表 |
 | `LGUI-RT-262` | 测试里用 `t.text` 读按钮或标签的文字，但组件里没有名为 `title` 的子控件：文字写进去了也不显示（浏览器里一样） | 在 `ui/` 里给这个组件加一个名为 `title` 的文字控件；要读组件里别的文字，路径写到那个子控件 |
 | `LGUI-RT-263` | `lgui test --browser` 不支持的写法：子测试（`t.test`）、`mock`、`done` 回调、`async` 的 `describe`、`t.advance` 一次超过 10 秒（浏览器里是真的等） | 浏览器里的测试只用 `test` / `describe`、`before` / `after` / `beforeEach` / `afterEach` 和 `node:assert/strict`；跨天这类长时间用 `lgui.time.setServerOffset`；必须用这些写法的测试不加 `--browser` |
+| `LGUI-RT-264` | 加载界面包时发现同名包已经在页面里，但它不是这个后端加载的（FairyGUI 按包名全局注册，别处——比如另一份 UI 产物的引导或冒烟代码——先加载了同名包，不报的话 `create` 会拿到别家的组件，绑定层随后报「组件里没有这个控件」） | 一个页面只放一套 LGUI 的界面包：找出谁先加载了同名包，别让两份 UI 产物进同一个页面 |
 | `LGUI-RT-027` | 后端还没启动就开始用 | 先调用 `backend.init(config)`（框架启动时会自动调用） |
 | `LGUI-RT-160` | Unity 启动脚本或 Resources 文本缺失、PuerTS 启动失败、每帧回调或宿主驱动、退出清理失败 | 每帧回调出错时按堆栈修正该回调，其他回调和后续帧继续运行；宿主启动失败时核对导出文件、PuerTS 3.0.3 本地包后重新启动场景 |
 | `LGUI-RT-161` | Unity 平台存储、HTTP、音频等服务失败 | 按日志检查存储权限、请求参数、资源地址或本地 PuerTS 环境 |

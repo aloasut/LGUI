@@ -12,6 +12,7 @@ const load = rel => import(pathToFileURL(path.join(repo, 'plugin', 'tools', 'lib
 
 const {generateCocos, generateProjectTypes, uiProjectPath} = await load('generate/index.mjs');
 const {generateTranslations} = await load('generate/i18n.mjs');
+const {readUiModel} = await load('generate/model.mjs');
 
 const projectRoot = path.join(repo, 'examples', 'inventory');
 const project = JSON.parse(fs.readFileSync(path.join(projectRoot, '.lgui', 'project.json'), 'utf8'));
@@ -57,7 +58,9 @@ if (process.argv.includes('--conformance')) {
   const ctx = await conformanceProject();
   const confUi = path.join(testbed, 'assets', 'conf-ui');
   await generateCocos(uiProjectPath(ctx.root), confUi);
-  console.log(`conf 界面包：→ assets/conf-ui/`);
+  // 翻译要进 conf-ui bundle（cocos 后端的 setLanguage 从界面包 bundle 里读 i18n/<语言>.xml TextAsset）。
+  generateTranslations(ctx.root, readUiModel(uiProjectPath(ctx.root)), ctx.project.languages, path.join(confUi, 'i18n'), ctx.project.defaultLanguage);
+  console.log(`conf 界面包：→ assets/conf-ui/（翻译：${ctx.project.languages.join('、')}）`);
   // src/conformance 拷进 assets/conf-src/，'lgui' 别名重写为相对路径（CC 工程没有 esbuild alias）。
   const confSrc = path.join(testbed, 'assets', 'conf-src');
   fs.rmSync(confSrc, {recursive: true, force: true});
