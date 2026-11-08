@@ -124,6 +124,10 @@ const tools = [
     },
     cli: args => ['art', 'cut', String(args.image), '--pkg', String(args.pkg), '--names', String(args.names), ...(args.size ? ['--size', String(args.size)] : [])]
   },
+  // lgui_dev_start/shot/stop（实时预览回路）暂不进白名单：实现与生命周期管理已就绪（devStart/devShot/devStop + cleanupDev），
+  // 但 dev 的 HTTP handler 在本测试环境下首个请求触发「重新生成」后挂起（await 不返回），调用方 2s 超时 destroy → ECONNRESET。
+  // 已排除：spawn stdio 形态（pipe/文件/三路开放 pipe 一致）、sandbox、残留进程、esbuild service stdio。
+  // 根因在 dev 生成链内部，排障数据见 tests 运行日志与 t011 证据。看效果用 lgui_verify（已验证稳定）。
   {
     name: 'lgui_cocos_export',
     description: '把 LGUI 工程导出到 Cocos Creator 工程（lgui cocos export）：界面包、图集、翻译、框架子集、启动脚本、模板场景。要求目标已安装 fairygui-cc@1.2.2。',
@@ -170,7 +174,11 @@ function runCli(args, cwd) {
     };
     poll();
     child.on('error', error => finish({ok: false, stdout: '', stderr: String(error)}));
-    child.on('close', () => setTimeout(() => finish({ok: true, stdout: readAll(), stderr: ''}), 50));
+    child.on('close', code => {
+      // 提前退出 = 起不来：把日志带给调用方（devStart 的失败路径会删文件，先读）。
+      const log = readAll().slice(-800);
+      setTimeout(() => finish({ok: code === 0, stdout: readAll(), stderr: log}), 50);
+    });
   });
 }
 
@@ -196,6 +204,13 @@ function readSpec(doc, query) {
 
 async function callTool(name, args, cwd) {
   if (name === 'lgui_spec') return readSpec(args?.doc ?? 'ui-spec', args?.query);
+  const devTool = tools.find(t => t.name === name && t.dev);
+  if (devTool) {
+    const root = process.env.LGUI_PROJECT_ROOT || process.cwd();
+    if (devTool.dev === 'start') return devStart(args, root);
+    if (devTool.dev === 'shot') return devShot(args);
+    return devStop(args);
+  }
   const funplay = funplayTools.find(t => t.name === name);
   if (funplay) {
     const forward = funplay.forward(args ?? {});
@@ -224,6 +239,80 @@ async function callTool(name, args, cwd) {
 function write(message) {
   process.stdout.write(JSON.stringify(message) + '\n');
 }
+
+/** lgui dev 实时预览的生命周期：LLM「改 ui/ → 立即截图看效果」的回路。
+ * dev server 常驻（watch 自动重新生成+推送刷新），浏览器实例懒启动复用；进程退出时统一清理。 */
+const devServers = new Map();
+let devBrowser = null;
+
+async function devStart(args, cwd) {
+  const key = String(args?.port ?? 4199);
+  if (devServers.has(key)) return {content: [{type: 'text', text: JSON.stringify({ok: true, url: `http://127.0.0.1:${key}/`, note: '已在运行'})}]};
+  // dev 的 stdio 三路都必须是保持打开的 pipe（两颗实测雷）：
+  // ① stdin 不能 ignore——dev 里 esbuild service 走继承的 stdin 与 esbuild 二进制通信，/dev/null 会让
+  //    service 立死（编译请求全挂、HTTP 连接 ECONNRESET，dev 无输出无退出）；
+  // ② stdout/stderr 不能文件重定向——同一机制在文件 fd 上同样卡死编译链。
+  // server 活着就保持 pipe 开放（不写不关）；server 退出后 dev 随 stdin EOF 自然退出，stop 时统一 SIGKILL。
+  const child = spawn(process.execPath, [lguiCli, 'dev', '--port', key, '--no-open'], {cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe']});
+  let devLog = '';
+  child.stdout.on('data', c => { devLog += c; });
+  child.stderr.on('data', c => { devLog += `[stderr] ${c}`; });
+  child.on('exit', (code, signal) => { devLog += `\n[exit code=${code} signal=${signal}]`; });
+  let lastPollError = '';
+  for (let waited = 0; waited < 30000; waited += 300) {
+    const up = await new Promise(resolve => {
+      const request = httpRequest(`http://127.0.0.1:${key}/`, {method: 'GET', timeout: 2000}, response => { response.resume(); resolve(response.statusCode === 200); });
+      request.on('error', cause => { lastPollError = `${cause.code ?? cause.message}`; resolve(false); });
+      request.on('timeout', () => { request.destroy(); lastPollError = 'timeout'; resolve(false); });
+    });
+    if (up) {
+      devServers.set(key, {child});
+      return {content: [{type: 'text', text: JSON.stringify({ok: true, url: `http://127.0.0.1:${key}/`, note: 'dev server 已启动（watch 生效：改 ui/ 自动重新生成并推送刷新）'})}]};
+    }
+    if (child.exitCode !== null) {
+      devServers.delete(key);
+      return {content: [{type: 'text', text: `lgui dev 提前退出（code ${child.exitCode}），输出已丢弃。`}], isError: true};
+    }
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+  try { child.kill('SIGKILL'); } catch { /* */ }
+  devServers.delete(key);
+  return {content: [{type: 'text', text: `dev server 30s 未就绪。末次轮询错误：${lastPollError || '无'}。dev 输出：\n${devLog.slice(-600)}`}], isError: true};
+}
+
+async function devShot(args) {
+  const key = String(args?.port ?? 4199);
+  const entry = devServers.get(key);
+  if (!entry) return {content: [{type: 'text', text: `dev server（端口 ${key}）没有在运行：先调 lgui_dev_start。`}], isError: true};
+  const {playwright} = await import(path.join(path.dirname(lguiCli), 'lib', 'vendor.mjs'));
+  if (!devBrowser) devBrowser = await playwright().chromium.launch({headless: true});
+  const page = await (devBrowser.newPage ?? (async () => devBrowser.context().newPage()))();
+  await page.setViewportSize({width: 1920, height: 1080});
+  await page.goto(`http://127.0.0.1:${key}/`, {waitUntil: 'load', timeout: 60000});
+  await page.waitForTimeout(1500); // 等渲染与首帧
+  const file = path.join(tmpdir(), `lgui-dev-shot-${Date.now()}.png`);
+  await page.screenshot({path: file});
+  await page.close();
+  return {content: [{type: 'text', text: JSON.stringify({ok: true, screenshot: file, note: '1920×1080 截图；改 ui/ 后 dev 自动刷新，再调一次 lgui_dev_shot 就是新效果'})}]};
+}
+
+function devStop(args) {
+  const key = String(args?.port ?? 4199);
+  const entry = devServers.get(key);
+  if (!entry) return {content: [{type: 'text', text: `dev server（端口 ${key}）没有在运行。`}]};
+  try { entry.child.kill('SIGKILL'); } catch { /* */ }
+  devServers.delete(key);
+  return {content: [{type: 'text', text: JSON.stringify({ok: true, stopped: key})}]};
+}
+
+function cleanupDev() {
+  for (const entry of devServers.values()) {
+    try { entry.child.kill('SIGKILL'); } catch { /* */ }
+  }
+  devServers.clear();
+  if (devBrowser) { try { devBrowser.close(); } catch { /* */ } devBrowser = null; }
+}
+process.on('exit', cleanupDev);
 
 /** 转发一个 tools/call 到 funplay-cocos-mcp 的编辑器内 HTTP MCP（streamable HTTP，POST /）。
  * 连不上时返回带修法提示的错误（Creator 没开 / extension 没启用）。 */
