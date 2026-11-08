@@ -190,7 +190,8 @@ export const bagModel = lgui.Model(initialState(), (set, get) => {
         left -= added;
       }
       s = get();
-      set({ items, nextId, newIds: markNew ? [...new Set([...s.newIds, ...ids])] : s.newIds });
+      // CC babel loose 把 [...set] 编译成 [].concat(set)（整个 Set 变一个元素）——可迭代展开一律 Array.from（h5 的 esbuild 无此问题，cocos 构建必炸）。
+      set({ items, nextId, newIds: markNew ? Array.from(new Set([...s.newIds, ...ids])) : s.newIds });
       return { ok: true, ids };
     },
     spend(coins: number): Result {

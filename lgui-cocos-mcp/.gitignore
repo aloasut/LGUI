@@ -24,3 +24,15 @@ testbed/extensions/
 # T008 conformance 产物（sync.mjs --conformance 产出）
 testbed/assets/conf-ui/
 testbed/assets/conf-src/
+
+# example 工程（决策 004：独立工程跑 examples/inventory，生成物不进 git）
+example/build/
+example/library/
+example/temp/
+example/profiles/
+example/node_modules/
+example/assets/lgui-ui/
+example/assets/lgui-framework/
+example/assets/ui-types/
+example/assets/app-src/
+example/assets/scripts/lgui-config.ts
