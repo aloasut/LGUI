@@ -27,12 +27,12 @@
 
 ## In Progress
 
-- M1/T008/T009（实机闭环）/T010/**T011（实机 Play 联调部分通过：boot 链 + 五层栈 + 渲染在 Creator Play 里全通；预览编译链静态枚举坑已修；预览面板 1080×1080 视口黑屏对齐待修）**。四方中 unity 侧见 tests/unity（另行验证）。
+- M1/T008/T009（实机闭环）/T010/**T011（实机 Play 联调：boot 链 + 五层栈 + 渲染计数在 Creator Play 里全通；预览编译链静态枚举坑已修。遗留独立问题：Creator 预览环境渲染可见性——内容在画但不可见，已排除相机顺序/清屏/视野/Canvas 接管，指向纹理/材质/管线层，排障入口见证据续段）**。四方中 unity 侧见 tests/unity（另行验证）。
 - 全部改动已分 7 个提交落在分支 lgui/cocos-backend-m1；**推送/PR 须 Owner 批准**。
 
 ## Next
 
-- 预览渲染对齐：Creator 预览面板视口（fitHeight 1080×1080）与 LGUI 设计适配的黑屏问题（含预览面板模拟分辨率/坐标点击换算，归 T011 尾巴）
+- Creator 预览渲染可见性排障（独立问题：内容在画但不可见，已排除的数据在 t011 证据续段；另含预览面板模拟分辨率/坐标点击换算）
 - M2 工具面按使用反馈扩充（editor props 中转、art split/cut 等）
 
 ## Deferred

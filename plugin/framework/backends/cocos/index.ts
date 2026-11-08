@@ -33,6 +33,15 @@ export function createCocosBackend(): Backend {
       const scene = director.getScene();
       if (!scene) throw new LgRuntimeError('LGUI-RT-028', '界面根节点挂不上去：场景还没就绪。', '在场景加载完成后再调用 lgui.app()。');
       let canvas = scene.getChildByName('Canvas') ?? scene.getComponentsInChildren(Canvas)[0]?.node ?? null;
+      if (canvas) {
+        // 复用现成 Canvas：其 UI 相机（visibility 含 UI_2D、DEPTH_ONLY 清屏）必须最后画——
+        // priority 抬到 1073741824（example 场景的配置值），否则场景相机同 priority 时顺序不定，
+        // 清屏的 3D 相机后画会把 LGUI 界面盖成黑屏（T011 Creator 预览实测）。
+        for (const child of canvas.children) {
+          const camera = child.getComponent(Camera);
+          if (camera) camera.priority = 1073741824;
+        }
+      }
       if (!canvas) {
         canvas = new Node('Canvas');
         scene.addChild(canvas);

@@ -39,4 +39,12 @@
 **抓出一颗新雷（第五颗 CC 工具链坑，已修）**：预览编译链（SystemJS/packer-driver）下 `Camera.Projection` / `Layers.Enum` 静态命名空间是 undefined（构建链正常）——backend init 建相机时 `Camera.Projection.ORTHO` 抛 TypeError、boot 中断。修：`backends/cocos/index.ts` 枚举从运行时构造器取（`cam.constructor.Projection?.ORTHO`）+ 确认过的数值兜底（ORTHO=0、SOLID_COLOR=7、UI_2D=1<<25，从 cc 构建产物源码核对）。
 连带发现：**export 的文件替换不触发 Creator 脚本重编译**（asset-db refresh 也不行）——重启 Creator 才重编译。实机迭代时重导出后要重启 Creator（或后续在 export 命令/文档里注明）。
 
-**部分未过——预览渲染对齐待修**：预览面板视口 1080×1080（Creator 预览按工程设计分辨率 fitHeight 模拟），LGUI 界面栈逻辑正确但**画面黑屏**（draw call/三角形有内容渲染，相机/视口对齐偏出）——与 T008c 转屏同类（窗口尺寸耦合的适配问题），方向：预览面板模拟分辨率设成 1920×1080，或后端 resize 适配补预览面板场景。坐标点击的换算也依赖同一适配，一并归入该项。
+**部分未过——预览渲染可见性（独立问题，记录全部数据）**：LGUI 界面栈逻辑正确、渲染在跑（draw call 15–17、三角形 269–461 稳定），但画面全黑。已排除的方向（playwright 在预览页逐项操作实测）：
+
+- ~~相机 priority 顺序~~：模板场景补 `_priority: 1073741824`（example 跑通值）+ backend init 兜底抬高——仍黑。
+- ~~清屏覆盖~~：禁用清屏的 Main Camera（visibility 不含 UI_2D）——仍黑（269 三角形还在画）。
+- ~~视野外~~：UI 相机 orthoHeight 540→1200→2000 扫描——仍黑（内容不在「视野外」）。
+- ~~UI 相机被 cc.Canvas 接管重置~~：实测运行时 UI 相机 priority=0、clearFlags=7（SOLID_COLOR 清屏黑），与场景 JSON（1073741824/6 DEPTH_ONLY）不符——**cc.Canvas 组件在运行时接管并重置相机配置**。手动改回正确配置（DEPTH_ONLY + 高 priority + 禁 Main Camera）后背景从灰变纯黑（清色消失），**内容仍不可见**。
+- 像素级：gl.readPixels 中心/角均为 (0,0,0,255)；GRoot 子树无 UIOpacity 组件。
+
+结论：内容三角形在画但输出不可见——指向预览环境的**纹理/材质或渲染管线层**（图集纹理在显存 11.53M）。与 T008c 转屏、EXACT_FIT 无关（几何/层级/相机配置全部核对无误）。此问题独立于「启动游戏」验收（web-mobile 构建产物全通；预览 boot 链全通），作为独立问题排（Creator 预览环境的渲染适配），排障入口：预览页 playwright + `cc.director.getScene()` 直接操作。
