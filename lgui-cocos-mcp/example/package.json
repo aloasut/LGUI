@@ -1,0 +1,10 @@
+{
+  "name": "lgui-cocos-example",
+  "uuid": "baba6a74-209a-4bb1-97f2-1669bef16386",
+  "creator": {
+    "version": "3.8.8"
+  },
+  "dependencies": {
+    "fairygui-cc": "1.2.2"
+  }
+}
