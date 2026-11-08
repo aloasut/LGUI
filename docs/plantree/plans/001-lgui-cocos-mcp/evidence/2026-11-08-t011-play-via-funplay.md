@@ -28,6 +28,8 @@
 
 ## 2026-11-08（续）：实机 Play 联调——启动链全通，预览渲染对齐待修
 
+> **【根因更正（2026-11-08 晚，Owner 点破）】**「黑屏」的真正原因：**Creator CLI 启动的编辑器当前场景是空的，预览跑的是空场景而非 main.scene**——backend init 的兜底（自动建 Canvas/相机）让逻辑链活着（`__lgui`/五层栈都在），但渲染的场景不对。用 funplay `open_scene` 打开 main（uuid 96ae589d-7292-484b-bce3-0f044916b0a3）后再预览，**画面完整渲染（Traveler's Camp 营地主界面：标题/Bag/Shop/Rewards 按钮/红点/限时活动条/背景图，60fps），截图 /tmp/t011-creator-play.png**。下面「渲染可见性」小节的整段深挖（相机顺序/清屏/视野/Canvas 接管排除）针对的是错误前提，数据保留作废；ORTHO 枚举修复仍有效（backend 自动建 Canvas 分支的真实中断）。固化：`cocos_preview` 工具加 `scene` 参数（转发前先 `open_scene`），单测断言 open+preview 两次调用序列（8/8）。
+
 对导出工程（inventory）跑真 GUI 实机链路：
 
 1. `extensions/funplay-cocos-mcp` 装进导出工程 + 工程根写 `funplay-cocos-mcp.config.json`（`{"portMode": "fixed", "port": 21600}`——固定端口可预设，免去派生端口扫描）。

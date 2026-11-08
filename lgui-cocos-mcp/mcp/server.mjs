@@ -94,7 +94,16 @@ function runCli(args, cwd) {
 
 async function callTool(name, args, cwd) {
   const funplay = funplayTools.find(t => t.name === name);
-  if (funplay) return callFunplay(funplay.forward(args ?? {}).name, funplay.forward(args ?? {}).arguments);
+  if (funplay) {
+    const forward = funplay.forward(args ?? {});
+    if (forward.scene) {
+      // 预览前先打开目标场景：Creator CLI 启动的编辑器当前场景为空，空场景预览会黑屏（T011 实测，Owner 点破）。
+      const open = await callFunplay('open_scene', {target: forward.scene});
+      if (open.isError) return open;
+      delete forward.scene;
+    }
+    return callFunplay(forward.name, forward.arguments);
+  }
   const tool = tools.find(t => t.name === name);
   if (!tool) return {content: [{type: 'text', text: `未知工具 ${name}`}], isError: true};
   const {stdout, stderr} = await runCli(tool.cli(args ?? {}), cwd);
@@ -140,9 +149,16 @@ function callFunplay(toolName, args) {
 const funplayTools = [
   {
     name: 'cocos_preview',
-    description: '在 Cocos Creator 里启动运行时预览（gameView/browser/simulator）——相当于点 Play。需要 Creator 已打开工程且启用了 Funplay > MCP Server。',
-    inputSchema: {type: 'object', properties: {mode: {type: 'string', enum: ['gameView', 'browser', 'simulator'], description: '预览方式，默认 gameView'}}, additionalProperties: false},
-    forward: args => ({name: 'run_project_preview', arguments: {mode: args?.mode ?? 'gameView'}})
+    description: '在 Cocos Creator 里启动运行时预览（gameView/browser/simulator）——相当于点 Play。Creator CLI 启动的编辑器当前场景是空的，预览空场景会黑屏：传 scene（场景 uuid 或 db:// 路径，如 db://assets/main）先打开目标场景再预览。需要 Creator 已打开工程且启用了 Funplay > MCP Server。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mode: {type: 'string', enum: ['gameView', 'browser', 'simulator'], description: '预览方式，默认 gameView'},
+        scene: {type: 'string', description: '要预览的场景 uuid 或 db:// 路径。强建议传：编辑器当前场景为空时预览会黑屏'}
+      },
+      additionalProperties: false
+    },
+    forward: args => ({name: 'run_project_preview', arguments: {mode: args?.mode ?? 'gameView'}, scene: args?.scene})
   },
   {
     name: 'cocos_screenshot',

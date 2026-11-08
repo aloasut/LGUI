@@ -165,6 +165,34 @@ test('MCP：cocos_* 工具转发到 funplay HTTP MCP（mock 端点验证协议�
   assert.equal(evalCall.body.params.arguments.context, 'scene');
 });
 
+test('MCP：cocos_preview 带 scene 时先 open_scene 再预览（空场景黑屏的固化修复）', async () => {
+  const requests = [];
+  const {createServer} = await import('node:http');
+  const mock = createServer((request, response) => {
+    const chunks = [];
+    request.on('data', c => chunks.push(c));
+    request.on('end', () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      requests.push(body);
+      response.writeHead(200, {'content-type': 'application/json'});
+      response.end(JSON.stringify({jsonrpc: '2.0', id: body.id, result: {content: [{type: 'text', text: 'ok'}]}}));
+    });
+  });
+  await new Promise(r => mock.listen(0, '127.0.0.1', r));
+  const root = await tempProject();
+  const s = session(root, {FUNPLAY_MCP_URL: `http://127.0.0.1:${mock.address().port}/`});
+  await s.send('initialize', {});
+  const call = await s.send('tools/call', {name: 'cocos_preview', arguments: {mode: 'browser', scene: 'db://assets/main'}});
+  assert.ok(!call.result.isError);
+  mock.close();
+  s.end();
+  assert.equal(requests.length, 2, '应有 open_scene + run_project_preview 两次调用');
+  assert.equal(requests[0].params.name, 'open_scene');
+  assert.deepEqual(requests[0].params.arguments, {target: 'db://assets/main'});
+  assert.equal(requests[1].params.name, 'run_project_preview');
+  assert.deepEqual(requests[1].params.arguments, {mode: 'browser'});
+});
+
 test('MCP：funplay 端点连不上时 isError true 并给出修法提示', async () => {
   const root = await tempProject();
   const s = session(root, {FUNPLAY_MCP_URL: 'http://127.0.0.1:9/'});
