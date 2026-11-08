@@ -13,9 +13,9 @@ test('不带参数时列出全部命令，退出码 0', async () => {
   for (const command of registry) assert.ok(result.stdout.includes(command.usage), command.name);
 });
 
-test('登记了方案 8.3 的 14 条命令和 editor props', () => {
+test('登记了方案 8.3 的命令清单和 editor props', () => {
   const names = registry.map(command => command.name);
-  assert.deepEqual(names.sort(), ['art cut', 'art split', 'check', 'dev', 'doctor', 'editor', 'editor props', 'i18n extract', 'init', 'new module', 'new view', 'test', 'ui list', 'unity export', 'upgrade', 'verify'].sort());
+  assert.deepEqual(names.sort(), ['art cut', 'art split', 'check', 'cocos export', 'dev', 'doctor', 'editor', 'editor props', 'i18n extract', 'init', 'new module', 'new view', 'test', 'ui list', 'unity export', 'upgrade', 'verify'].sort());
 });
 
 test('未知命令报 LGUI-CLI-001，并列出全部命令', async () => {

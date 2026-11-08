@@ -16,7 +16,7 @@ LGUI 仓库的规划入口。职责分工：
 
 | ID | Plan | Affected Modules | Status | Current Phase | Last Landed | Next Target |
 |---|---|---|---|---|---|---|
-| [P001](plans/001-lgui-cocos-mcp/README.md) | lgui-cocos-mcp：Cocos Creator 接入 LGUI（MCP 驱动，替代 FGUI 工作流） | lgui-cocos-mcp, plugin/framework, plugin/tools | In Progress | M1（T005/T006 落地；T007 testbed 就绪，待 Creator 实测） | 2026-11-08 [T007 完成](plans/001-lgui-cocos-mcp/evidence/2026-11-07-t007-cli-build-attempt.md)，M1 主体在分支 lgui/cocos-backend-m1（推送在 fork；PR 已按 Owner 要求关闭，开 PR 须先经批准） | T008 conformance 四方快照 |
+| [P001](plans/001-lgui-cocos-mcp/README.md) | lgui-cocos-mcp：Cocos Creator 接入 LGUI（MCP 驱动，替代 FGUI 工作流） | lgui-cocos-mcp, plugin/framework, plugin/tools | In Progress | M1（T005/T006/T007 落地；T008 桥通、T008c/d 进行中；T014 example 独立工程全链跑通） | 2026-11-08 [T014 example 独立工程](plans/001-lgui-cocos-mcp/evidence/2026-11-08-t014-example-standalone-project.md)，分支 lgui/cocos-backend-m1（推送在 fork；PR 须先经批准） | T008 四方快照（T008c 手动 runner + T008d 输入位） |
 
 ## 其他
 
