@@ -28,6 +28,12 @@ T010（M2）：把 lgui CLI 包装成 MCP 工具，给 MCP 宿主（ZCode/Claude
 | `lgui_ui_list` | `ui list` | 界面包、组件、控件清单 |
 | `lgui_test` | `test` | headless 一致性测试 |
 | `lgui_verify` | `verify` | 标准横竖屏截图核对 |
+| `lgui_spec` | 读 references 规范 | **LLM 开发 UI 的知识源**：`doc` = ui-spec / mvc-spec / error-codes，`query` 关键词检索（返回匹配行 ±2 行上下文；空则全文）。写界面 XML / 绑定表前先取相关章节 |
+| `lgui_new_module` | `new module <名字> [--pattern]` | 生成功能模块骨架（Model/View/Controller/测试 + 横竖两版界面） |
+| `lgui_new_view` | `new view <包>/<组件> --pattern` | 在已有包里生成界面骨架（横竖两版一次生成） |
+| `lgui_i18n_extract` | `i18n extract` | 从 ui/ 提取需要翻译的文字 |
+| `lgui_art_split` | `art split <图> --grid --size --pkg --names` | 把 AI 生成的网格大图拆成小图进包 |
+| `lgui_art_cut` | `art cut <图> --pkg --names [--size]` | 按透明区域把 AI 生成的一页图集拆成小图进包 |
 | `lgui_cocos_export` | `cocos export --to <路径>` | 导出到 Cocos Creator 工程（参数 `to` 必填） |
 | `cocos_preview` | funplay `run_project_preview` | **启动游戏**：Creator 里启动运行时预览（gameView/browser/simulator）。需 Creator 已开工程并启用 Funplay > MCP Server（env `FUNPLAY_MCP_URL`，默认 `http://127.0.0.1:8765/`） |
 | `cocos_screenshot` | funplay `capture_game_screenshot` | 对 Game 预览区截图，返回路径 |

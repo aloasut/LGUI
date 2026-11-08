@@ -12,6 +12,7 @@ import {fileURLToPath} from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const lguiCli = path.resolve(here, '../../plugin/tools/lgui.mjs');
+const referencesDir = path.resolve(here, '../../plugin/references');
 const serverInfo = {name: 'lgui-cocos', version: '0.3.0'};
 // funplay-cocos-mcp（编辑器内 HTTP MCP）的端点：T011/M3 的实机面（预览/截图/运行时 JS）从这里走。
 const funplayUrl = process.env.FUNPLAY_MCP_URL ?? 'http://127.0.0.1:8765/';
@@ -41,6 +42,87 @@ const tools = [
     description: '生成标准横竖屏截图并核对界面（lgui verify），输出截图路径。',
     inputSchema: {type: 'object', properties: {}, additionalProperties: false},
     cli: () => ['verify', '--json']
+  },
+  {
+    name: 'lgui_spec',
+    description: '读 LGUI 开发规范（ui-spec：界面 XML 的组件/控件/动效/关联写法；mvc-spec：绑定表/Model/View/Controller；error-codes：错误码清单）。开发界面/绑定表之前先取相关章节，保证写法合规。query 为空返回全文（较长），有关键词返回匹配行及上下文。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        doc: {type: 'string', enum: ['ui-spec', 'mvc-spec', 'error-codes'], description: '要读的规范文档'},
+        query: {type: 'string', description: '关键词（可选）：只返回匹配行及其上下文，比如「动效」「transition」「绑定表」「LGUI-UI-067」'}
+      },
+      required: ['doc'],
+      additionalProperties: false
+    },
+    spec: true
+  },
+  {
+    name: 'lgui_new_module',
+    description: '生成一个功能模块的骨架（lgui new module）：Model/View/Controller/测试 + 横竖两版界面，是开发新界面的起点。生成后跑 lgui_check 校验。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {type: 'string', description: '模块名（英文，如 settings）'},
+        pattern: {type: 'string', description: '界面排布模式（可选）：tabs/page/dialog 等'}
+      },
+      required: ['name'],
+      additionalProperties: false
+    },
+    cli: args => ['new', 'module', String(args.name), ...(args.pattern ? ['--pattern', String(args.pattern)] : [])]
+  },
+  {
+    name: 'lgui_new_view',
+    description: '在已有包里按排布模式生成界面骨架（lgui new view）：横竖两版一次生成（lgui new view <包>/<组件> --pattern <模式>）。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target: {type: 'string', description: '包/组件名（如 Shop/ShopPanel）'},
+        pattern: {type: 'string', description: '界面排布模式（tabs/page/dialog 等）'}
+      },
+      required: ['target', 'pattern'],
+      additionalProperties: false
+    },
+    cli: args => ['new', 'view', String(args.target), '--pattern', String(args.pattern)]
+  },
+  {
+    name: 'lgui_i18n_extract',
+    description: '从 ui/ 提取需要翻译的文字（lgui i18n extract）：界面里的固定文字进文本表，之后在 i18n/<语言>.json 里翻译。',
+    inputSchema: {type: 'object', properties: {}, additionalProperties: false},
+    cli: () => ['i18n', 'extract', '--json']
+  },
+  {
+    name: 'lgui_art_split',
+    description: '把 AI 生成的网格大图拆成小图并缩放到指定尺寸（lgui art split），产物直接进 ui/ 的包目录。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        image: {type: 'string', description: '大图路径（相对 LGUI 工程）'},
+        grid: {type: 'string', description: '列x行（如 4x2）'},
+        size: {type: 'string', description: '每张小图目标尺寸 宽x高（如 80x80）'},
+        pkg: {type: 'string', description: '目标包名'},
+        names: {type: 'string', description: '名字列表（逗号分隔或文件路径）'}
+      },
+      required: ['image', 'grid', 'size', 'pkg', 'names'],
+      additionalProperties: false
+    },
+    cli: args => ['art', 'split', String(args.image), '--grid', String(args.grid), '--size', String(args.size), '--pkg', String(args.pkg), '--names', String(args.names)]
+  },
+  {
+    name: 'lgui_art_cut',
+    description: '按透明区域把 AI 生成的一页图集拆成小图（lgui art cut）：统一缩放、去白边、出检查图，产物直接进 ui/ 的包目录。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        image: {type: 'string', description: '整页图路径（相对 LGUI 工程）'},
+        pkg: {type: 'string', description: '目标包名'},
+        names: {type: 'string', description: '名字列表（逗号分隔或文件路径）'},
+        size: {type: 'string', description: '统一缩放尺寸 宽x高（可选）'}
+      },
+      required: ['image', 'pkg', 'names'],
+      additionalProperties: false
+    },
+    cli: args => ['art', 'cut', String(args.image), '--pkg', String(args.pkg), '--names', String(args.names), ...(args.size ? ['--size', String(args.size)] : [])]
   },
   {
     name: 'lgui_cocos_export',
@@ -92,7 +174,28 @@ function runCli(args, cwd) {
   });
 }
 
+/** 读规范文档：query 为空返回全文，有关键词返回匹配行 ±2 行上下文。 */
+function readSpec(doc, query) {
+  const file = path.join(referencesDir, `${doc}.md`);
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); }
+  catch { return {content: [{type: 'text', text: `读不到规范 ${file}`}], isError: true}; }
+  if (!query?.trim()) return {content: [{type: 'text', text}]};
+  const lines = text.split('\n');
+  const keyword = query.trim().toLowerCase();
+  const hits = [];
+  lines.forEach((line, index) => {
+    if (line.toLowerCase().includes(keyword)) {
+      const from = Math.max(0, index - 2), to = Math.min(lines.length, index + 3);
+      hits.push(`（第 ${index + 1} 行）\n${lines.slice(from, to).join('\n')}`);
+    }
+  });
+  if (!hits.length) return {content: [{type: 'text', text: `《${doc}.md》里没有匹配「${query}」的行。去掉 query 取全文，或换关键词（比如「动效」「transition」「绑定表」「列表」）。`}]};
+  return {content: [{type: 'text', text: hits.join('\n\n——\n\n')}]};
+}
+
 async function callTool(name, args, cwd) {
+  if (name === 'lgui_spec') return readSpec(args?.doc ?? 'ui-spec', args?.query);
   const funplay = funplayTools.find(t => t.name === name);
   if (funplay) {
     const forward = funplay.forward(args ?? {});

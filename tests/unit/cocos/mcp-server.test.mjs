@@ -78,7 +78,7 @@ test('MCP：tools/list 返回五个白名单工具，全部带 inputSchema', asy
   await s.send('initialize', {});
   const list = await s.send('tools/list');
   const names = list.result.tools.map(t => t.name).sort();
-  assert.deepEqual(names, ['cocos_eval', 'cocos_preview', 'cocos_screenshot', 'lgui_check', 'lgui_cocos_export', 'lgui_test', 'lgui_ui_list', 'lgui_verify']);
+  assert.deepEqual(names, ['cocos_eval', 'cocos_preview', 'cocos_screenshot', 'lgui_art_cut', 'lgui_art_split', 'lgui_check', 'lgui_cocos_export', 'lgui_i18n_extract', 'lgui_new_module', 'lgui_new_view', 'lgui_spec', 'lgui_test', 'lgui_ui_list', 'lgui_verify']);
   for (const tool of list.result.tools) {
     assert.equal(tool.inputSchema.type, 'object', tool.name);
     assert.ok(tool.description.length > 10, tool.name);
@@ -163,6 +163,20 @@ test('MCP：cocos_* 工具转发到 funplay HTTP MCP（mock 端点验证协议�
   const evalCall = requests[1];
   assert.equal(evalCall.body.params.name, 'execute_javascript');
   assert.equal(evalCall.body.params.arguments.context, 'scene');
+});
+
+test('MCP：lgui_spec 取规范全文与关键词检索', async () => {
+  const root = await tempProject();
+  const s = session(root);
+  await s.send('initialize', {});
+  const full = await s.send('tools/call', {name: 'lgui_spec', arguments: {doc: 'ui-spec'}});
+  assert.ok(!full.result.isError);
+  assert.ok(textOf(full).includes('transition'), 'ui-spec 全文应含动效章节');
+  const hit = await s.send('tools/call', {name: 'lgui_spec', arguments: {doc: 'error-codes', query: 'LGUI-CLI-053'}});
+  assert.ok(textOf(hit).includes('fairygui-cc@1.2.2'), '053 错误码应能检索到');
+  const miss = await s.send('tools/call', {name: 'lgui_spec', arguments: {doc: 'ui-spec', query: '不存在的关键词xyz'}});
+  assert.ok(textOf(miss).includes('没有匹配'));
+  s.end();
 });
 
 test('MCP：cocos_preview 带 scene 时先 open_scene 再预览（空场景黑屏的固化修复）', async () => {

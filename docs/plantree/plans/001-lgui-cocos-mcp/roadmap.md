@@ -23,7 +23,7 @@
 - **T009 实机闭环（当日续）**：导出工程 npm 装 fairygui-cc → Creator CLI 构建（0 模块解析错误）→ 无头验收启动链全通（boot/MainView/点开背包/截图）。实机构建抓出两颗雷已修：project-template 混进框架源码（cpSync filter 排除）、**lgui-ui 缺 bundle 文件夹 meta**（`isBundle+bundleName` 写进 meta 的 userData，uuid 随机防撞；缺它 bundle 加载 404、启动链挂死）（证据 t009 续段）
 - **T010 MCP server 落地（M2 第二项）**：`lgui-cocos-mcp/mcp/server.mjs`——stdio 最小 MCP（手写 JSON-RPC，无 SDK），5 个白名单工具包装 lgui CLI `--json`（check/ui_list/test/verify/cocos_export），口令只有 CLI 一份。decisions/006 **收口 Q5**。协议测试 5/5（真 spawn server 握手 + 真工具调用 + 错误透传）。排坑：CLI 子进程输出后不退出（stdin pipe + OpenFairyGUI/verify 句柄）→ runCli JSON 早结算 + child.kill，spawn stdin 必须 ignore（[证据](evidence/2026-11-08-t010-mcp-server.md)）
 
-- **T011/M3 启动游戏打通（M2/M3 交界）**：[decisions/007](decisions/007-m3-play-via-funplay.md) 收口 Q4——不自研 extension，复用 testbed vendored 的 funplay-cocos-mcp（MIT，编辑器内 streamable HTTP MCP）。lgui-cocos server 新增 3 个代理工具：cocos_preview（Play）、cocos_screenshot、cocos_eval（scene 上下文读 `__lgui` 验收）。顺带根治 MCP server 第三颗雷：CLI 子进程树持有 pipe fd 导致调用方永不 EOF——输出改走临时文件 + 轮询 + SIGKILL（测试进程零孤儿）。协议形状 mock 单测覆盖；实机 Play 联调（Creator GUI 会话）待补（[证据](evidence/2026-11-08-t011-play-via-funplay.md)）
+- **T011/M3 启动游戏打通（M2/M3 交界）**：[decisions/007](decisions/007-m3-play-via-funplay.md) 收口 Q4——不自研 extension，复用 testbed vendored 的 funplay-cocos-mcp（MIT，编辑器内 streamable HTTP MCP）。lgui-cocos server 新增 3 个代理工具：cocos_preview（Play）、cocos_screenshot、cocos_eval（scene 上下文读 `__lgui` 验收）。顺带根治 MCP server 第三颗雷：CLI 子进程树持有 pipe fd 导致调用方永不 EOF——输出改走临时文件 + 轮询 + SIGKILL（测试进程零孤儿）。协议形状 mock 单测覆盖；实机 Play 联调**全通**（当日续）：funplay 配置文件预设固定端口/toolProfile full、open_scene 打开 main 后预览画面完整渲染（此前「黑屏」根因是 Creator CLI 启动的编辑器当前场景为空、预览跑的是空场景，Owner 点破；预览编译链静态枚举坑在此过程中修掉）（[证据](evidence/2026-11-08-t011-play-via-funplay.md)）
 
 ## In Progress
 
@@ -32,8 +32,8 @@
 
 ## Next
 
-- M2 工具面按使用反馈扩充（editor props 中转、art split/cut 等）
-- 全部改动统一 review 后走提交流程（分支 lgui/cocos-backend-m1 上已 9 个提交；推送/PR 须 Owner 批准）
+- M2 工具面持续扩充：已加 spec（ui-spec/mvc-spec/error-codes 检索）/骨架生成/翻译提取/AI 出图入包（白名单 5→14，协议测试 9/9）；待使用反馈决定是否加 editor props 中转
+- 全部改动统一 review 后走提交流程（分支 lgui/cocos-backend-m1 上已 10 个提交；推送/PR 须 Owner 批准）
 
 ## Deferred
 
