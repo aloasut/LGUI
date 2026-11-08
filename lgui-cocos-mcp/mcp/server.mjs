@@ -270,6 +270,16 @@ async function devStart(args, cwd) {
   //    service 立死（编译请求全挂、HTTP 连接 ECONNRESET，dev 无输出无退出）；
   // ② stdout/stderr 不能文件重定向——同一机制在文件 fd 上同样卡死编译链。
   // server 活着就保持 pipe 开放（不写不关）；server 退出后 dev 随 stdin EOF 自然退出，stop 时统一 SIGKILL。
+  // 端口占用预检：失败轮次遗留的孤儿 dev 会占着端口（连接立即被接受但有响应），不预检的话
+  // 后续调用只见神秘的 ECONNRESET「30s 未就绪」（T011 实测链式复现）。有响应 = 被占用，明确报错。
+  const probe = await new Promise(resolve => {
+    const request = httpRequest(`http://127.0.0.1:${key}/`, {method: 'GET', timeout: 1500}, response => { response.resume(); resolve(true); });
+    request.on('error', () => resolve(false));
+    request.on('timeout', () => { request.destroy(); resolve(false); });
+  });
+  if (probe) {
+    return {content: [{type: 'text', text: `端口 ${key} 已被占用（可能是之前遗留的 lgui dev）。清理残留进程后重试，或换一个端口。`}], isError: true};
+  }
   const child = spawn(process.execPath, [lguiCli, 'dev', '--port', key, '--no-open'], {cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe']});
   let devLog = '';
   child.stdout.on('data', c => { devLog += c; });
