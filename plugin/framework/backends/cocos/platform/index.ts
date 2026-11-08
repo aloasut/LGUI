@@ -1,12 +1,12 @@
 // cocos 后端的平台服务：引擎 API（Web 目标优先；差异点都在注释里标了）。
-import {game, sys, view, assetManager, Component, Game, type AssetManagerBundle} from 'cc';
+import {game, sys, view, assetManager, Component, Game, ResolutionPolicy, screen as ccScreen, type AssetManagerBundle} from 'cc';
 import * as fgui from 'fairygui-cc';
 import type {
   Platform, KeyInput, WheelInput, NetResponse, NetSocket, Insets, PointerInput, Rect, Unsubscribe
 } from '../../../core/index';
 import {LgRuntimeError} from '../../../core/index';
 import {fitDesign, stage} from '../screen';
-import {toPointerInput} from '../pointer';
+import {toPointerInput, domPointer, domWheel} from '../pointer';
 import type {FguiEventOf} from '../pointer';
 import {installImeTracking, isComposing} from '../ime';
 import {createCocosAudio} from './audio';
@@ -54,7 +54,7 @@ export const bundleReady = (bundleName: string): Promise<AssetManagerBundle> => 
   });
 });
 
-export function createCocosPlatform(projectName: string, uiBase: string): Platform {
+export function createCocosPlatform(projectName: string, uiBase: string, stageRoot: fgui.GComponent): Platform {
   const bundleName = uiBase || 'lgui-ui';
   const frame = new Handlers<number>();
   const visibility = new Handlers<boolean>();
@@ -83,27 +83,49 @@ export function createCocosPlatform(projectName: string, uiBase: string): Platfo
     else console.error('[lgui] 帧回调出错（未捕获）：', error);
   }
 
+  // 引擎设计分辨率跟窗口 1:1（EXACT_FIT，T014 不变式）：设计区域的适配由 applyDesignSize 的 stage 缩放独自承担。
+  // 引擎若用工程设置的设计分辨率再缩一层，窗口一变（转屏、异形窗）就 letterbox + 两套刻度打架；
+  // getVisibleSize 还会是陈值（cc 的 resize 处理是懒的）。所以屏幕尺寸一律读 ccScreen.windowSize（UI 像素、及时刷新），
+  // 引擎策略每次 resize 都重设。原生目标 T012 换引擎输入时另行处理。
+  const syncEngineDesign = (): void => {
+    const {width, height} = ccScreen.windowSize;
+    if (width > 0 && height > 0) view.setDesignResolutionSize(width, height, ResolutionPolicy.EXACT_FIT);
+  };
+  syncEngineDesign();
+
   const size = (): {width: number; height: number} => {
-    const visible = view.getVisibleSize();
-    return {width: visible.width, height: visible.height};
+    const windowSize = ccScreen.windowSize;
+    return {width: windowSize.width, height: windowSize.height};
   };
 
-  // 原始输入（舞台上的全部指针，支持多点）：根节点收冒泡上来的运行库事件，坐标已是设计尺寸。
+  // 原始输入（舞台上的全部指针，支持多点）：GRoot 本体收冒泡上来的运行库事件（含模态遮罩层的点击）。
+  // 事件坐标是 GRoot 尺寸（世界）单位，换算成设计单位再上报——手势阈值与 h5 同一把尺子。
+  const toDesign = (x: number, y: number): {x: number; y: number} => ({x: x / (stage.scale || 1), y: y / (stage.scale || 1)});
   for (const type of [fgui.Event.TOUCH_BEGIN, fgui.Event.TOUCH_MOVE, fgui.Event.TOUCH_END]) {
     root.on(type, event => {
-      pointer.emit(toPointerInput(event as unknown as FguiEventOf));
+      const input = toPointerInput(event as unknown as FguiEventOf);
+      const design = toDesign(input.x, input.y);
+      pointer.emit({...input, ...design});
       unlockAudio();
     });
   }
-  // 滚轮：引擎只有纵向量（mouseWheelDelta），横向滚动量运行库没透出，记 0。
+  // 滚轮：增量取 DOM 地面真相（domWheel，正 = 向下，h5 同）——运行库的 mouseWheelDelta 向下滚恒为 0（pointer.ts 注释）；
+  // 事件本身仍用运行库的 MOUSE_WHEEL：命中目标、设计坐标都是它定的。
   root.on(fgui.Event.MOUSE_WHEEL, event => {
     const wheel = event as unknown as FguiEventOf;
-    wheels.emit({x: wheel.pos.x, y: wheel.pos.y, deltaX: 0, deltaY: wheel.mouseWheelDelta});
+    wheels.emit({...toDesign(wheel.pos.x, wheel.pos.y), deltaX: domWheel.deltaX, deltaY: domWheel.deltaY});
   });
   if (typeof document !== 'undefined') {
-    document.addEventListener('keydown', e => { if (!isComposing()) keys.emit({type: 'down', key: keyName(e), repeat: e.repeat}); unlockAudio(); });
-    document.addEventListener('keyup', e => { if (!isComposing()) keys.emit({type: 'up', key: keyName(e), repeat: false}); });
-    const onResize = (): void => resizes.emit(size());
+    // 键盘必须用 capture：cc 引擎在 GameCanvas 上的 keydown 处理器会 stopPropagation + preventDefault，
+    // 画布聚焦后（点过一次画布就聚焦）冒泡阶段的 document 监听永远收不到（T008c stack-keys 实测）。
+    // document 捕获先于 canvas 目标阶段，天然在引擎之前。组字期间不 emit（isComposing 守卫不变）。
+    document.addEventListener('keydown', e => { if (!isComposing()) keys.emit({type: 'down', key: keyName(e), repeat: e.repeat}); unlockAudio(); }, true);
+    document.addEventListener('keyup', e => { if (!isComposing()) keys.emit({type: 'up', key: keyName(e), repeat: false}); }, true);
+    // 真实设备类型以 DOM pointerType 为准（鼠标点击会被引擎合成成触摸，见 pointer.ts domPointer）。
+    document.addEventListener('pointerdown', e => { domPointer.type = e.pointerType === 'touch' ? 'touch' : e.pointerType === 'pen' ? 'pen' : 'mouse'; });
+    // 滚轮增量的地面真相（capture 先于引擎的监听，同一 DOM 事件内同步可读，见 pointer.ts domWheel）。
+    document.addEventListener('wheel', e => { domWheel.deltaX = e.deltaX; domWheel.deltaY = e.deltaY; }, {passive: true, capture: true});
+    const onResize = (): void => { syncEngineDesign(); resizes.emit(size()); };
     window.addEventListener('resize', onResize); // Web 目标：画布跟窗口走（原生目标 T012）
   }
 
@@ -175,8 +197,9 @@ export function createCocosPlatform(projectName: string, uiBase: string): Platfo
       applyDesignSize(design): Rect {
         const {scale, visible} = fitDesign(size(), design);
         stage.scale = scale;
-        root.setScale(scale, scale, 1);
-        root.setSize(visible.width, visible.height);
+        // 只缩放内层 stage；GRoot 本体保持 vanilla 尺寸（命中测试/坐标换算的约定，见 index.ts 挂载注释）。
+        stageRoot.setScale(scale, scale, 1);
+        stageRoot.setSize(visible.width, visible.height);
         return visible;
       }
     },

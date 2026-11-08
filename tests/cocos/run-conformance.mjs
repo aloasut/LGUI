@@ -21,11 +21,15 @@ const posix = p => p.split(path.sep).join('/');
 // 本机 Creator 的 CLI 入口（首次导入必须 GUI 打开过一次，见 plan-tree P001 的 T007 证据）。
 const creatorBin = process.env.CC_CREATOR_BIN ?? '/Applications/Cocos/Creator/3.8.8/CocosCreator.app/Contents/MacOS/CocosCreator';
 
-/** Creator CLI 构建 testbed。 */
+/** Creator CLI 构建 testbed。本机 3.8.8 的 CLI 构建即便成功也退出 36（警告走 console.error 就计exit 码，T008c 实测 example 同样 36），
+ * 所以成功判据是构建任务 Finished + 产物存在，不是退出码。 */
 function buildTestbed() {
   if (!fs.existsSync(creatorBin)) throw new Error(`找不到 Creator CLI（${creatorBin}）；用 CC_CREATOR_BIN 覆盖路径，或在 Creator GUI 里构建一次。`);
-  const r = spawnSync(creatorBin, ['--project', testbed, '--build', 'platform=web-mobile;debug=true'], {stdio: 'inherit'});
-  if (r.status !== 0) throw new Error(`Creator CLI 构建失败（exit ${r.status}）。`);
+  const r = spawnSync(creatorBin, ['--project', testbed, '--build', 'platform=web-mobile;debug=true'], {encoding: 'utf8'});
+  process.stdout.write(r.stdout ?? '');
+  process.stderr.write(r.stderr ?? '');
+  const finished = /build Task \(web-mobile\) Finished/.test(r.stdout ?? '') && fs.existsSync(path.join(buildDir, 'index.html'));
+  if (!finished) throw new Error(`Creator CLI 构建失败（exit ${r.status}）：产物没出来或构建任务没跑完。`);
 }
 
 // testbed 构建产物是静态站（cocos-js、assets、.bin/.png/.webp），自己开个只听 127.0.0.1 的服务。
@@ -33,6 +37,7 @@ const types = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
   '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.wav': 'audio/wav'};
 function serveBuild() {
   const server = http.createServer((req, res) => {
+    if (req.url === '/favicon.ico') { res.writeHead(204).end(); return; } // 浏览器噪音，别进错误收集
     const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     const file = path.resolve(buildDir, '.' + url);
     if (!file.startsWith(buildDir + path.sep) || !fs.statSync(file, {throwIfNoEntry: false})?.isFile()) {
@@ -85,24 +90,35 @@ try {
   for (const name of names) {
     console.log(`▸ ${name}`);
     const {screen} = await caseScreen(ctx, name);
+    // T014/T008d 实测（P001 证据 2026-11-08-t014）：鼠标操作用 playwright 真实鼠标（CDP synthesizeTapGesture
+    // 在 FGUI 链上不产生 click）；触摸操作用 CDP touch 序列（headless sim 的 drag/swipe 语义是 touch）。
     const page = await browser.newPage({viewport: screen, hasTouch: true});
     const errors = [];
     page.on('pageerror', e => errors.push(String(e.message ?? e)));
-    page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+    page.on('console', m => { const t = m.text(); if (m.type() === 'error' && !/favicon/i.test(t)) errors.push(t); });
     const result = {name, status: 'PASS'};
     // __pw：页面把控件中心换算成页面像素后，从这里派发真实输入（ConformanceBoot 的输入位）。
     await page.exposeFunction('__pw', async (op, ...a) => {
       const cdp = await page.context().newCDPSession(page);
+      const touch = (type, px, py) => cdp.send('Input.dispatchTouchEvent', {type, touchPoints: type === 'touchEnd' ? [] : [{x: px, y: py, id: 1}]});
+      const sleep = t => new Promise(resolve => setTimeout(resolve, t));
       if (op === 'press') {
-        await page.mouse.move(a[0], a[1]);
-        await cdp.send('Input.synthesizeTapGesture', {x: a[0], y: a[1], duration: a[2], gestureSourceType: a[3] === 'touch' ? 'touch' : 'mouse'});
+        // pointerType 由用例（headless sim 的语义）指定：mouse → 真实鼠标，touch → CDP 触摸按下-保持-抬起。
+        if (a[3] === 'touch') {
+          await touch('touchStart', a[0], a[1]);
+          await sleep(a[2] ?? 50);
+          await touch('touchEnd');
+        } else {
+          await page.mouse.move(a[0], a[1]);
+          await page.mouse.down();
+          await sleep(a[2] ?? 50);
+          await page.mouse.up();
+        }
       }
       else if (op === 'touchPath') {
+        // 拖拽轨迹：headless 的 drag/swipe 是 touch 语义，走 CDP 触摸沿路径插值。
         const [x0, y0, x1, y1, ms, steps] = a;
-        const touch = (type, px, py) => cdp.send('Input.dispatchTouchEvent', {type, touchPoints: type === 'touchEnd' ? [] : [{x: px, y: py, id: 1}]});
-        const sleep = t => new Promise(resolve => setTimeout(resolve, t));
         await touch('touchStart', x0, y0);
-        await sleep(ms / steps);
         for (let i = 1; i <= steps; i++) {
           const k = i / steps;
           await touch('touchMove', x0 + (x1 - x0) * k, y0 + (y1 - y0) * k);
@@ -112,6 +128,11 @@ try {
       }
       else if (op === 'wheel') { await page.mouse.move(a[0], a[1]); await page.mouse.wheel(0, a[2]); }
       else if (op === 'key') await page.keyboard.press(a[0]);
+      else if (op === 'type') await page.keyboard.type(a[0], {delay: 40});
+      // 按住滑块一次移到目标再松开（只发一次移动，FairyGUI 只通知一次）。
+      else if (op === 'mouseDrag') { await page.mouse.move(a[0], a[1]); await page.mouse.down(); await page.mouse.move(a[2], a[3]); await page.mouse.up(); }
+      // 全选当前聚焦的输入框（打字前替换、退格清空用）。
+      else if (op === 'selectInput') await page.evaluate(() => { const el = document.activeElement; if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) el.select(); });
       else if (op === 'viewport') await page.setViewportSize({width: a[0], height: a[1]});
       else throw new Error(`未知操作 ${op}`);
     });

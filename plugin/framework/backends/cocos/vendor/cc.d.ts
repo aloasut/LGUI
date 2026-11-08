@@ -162,6 +162,8 @@ export class AssetManagerBundle {
 export const assetManager: {
   loadBundle(name: string | BundleLoadOptions, onComplete?: (error: Error | null, bundle: AssetManagerBundle) => void): void;
   bundles: Map<string, AssetManagerBundle>;
+  /** 强制释放一个资产（不走引用计数，直接 destroy）——cocos 后端 setLanguage 的延迟释放用它。 */
+  releaseAsset(asset: Asset): void;
 };
 
 export class AudioSourceComponent extends Component {

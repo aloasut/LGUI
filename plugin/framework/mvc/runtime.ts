@@ -69,8 +69,11 @@ let current: Current | null = null;
 
 /** 内部用：设置当前后端。platform 里给了的服务换掉后端自带的，其余用后端的。 */
 export function setRuntime(backend: Backend, config: RuntimeConfig, wallBase = Date.now(), deps: Record<string, string[]> = {}, platform: PlatformOverrides = {}): void {
+  // 缺的字段用默认值补齐（defaultConfig 的注释承诺「测试里可以只改其中几项」）——
+  // conf 工程不配 sounds 时 clickSound 读 config.sounds.click 直接崩（T008d 输入位首次真正点击时暴露）。
+  const merged = {...defaultConfig, ...config};
   current = {
-    backend, config, deps, ui: null, wallBase, monoBase: backend.platform.time.now(), serverOffset: 0,
+    backend, config: merged, deps, ui: null, wallBase, monoBase: backend.platform.time.now(), serverOffset: 0,
     log: platform.log ?? backend.platform.log, audio: platform.audio ?? backend.platform.audio, clipboard: platform.clipboard ?? backend.platform.clipboard
   };
 }

@@ -20,7 +20,9 @@ export function createCocosAudio(): {service: AudioService; unlock(): void; tick
     if (!host) {
       const scene = director.getScene();
       if (!scene) throw new LgRuntimeError('LGUI-RT-028', '声音出口建不起来：场景还没就绪。', '在场景加载完成后再调用 lgui.app()。');
-      host = scene.addChild(new CcNode('LGUI-Audio'));
+      // cc 的 addChild 返回 void（不是子节点）——先建节点再挂，别把返回值当节点用（T008/example 校准发现）。
+      host = new CcNode('LGUI-Audio');
+      scene.addChild(host);
     }
     if (!musicSource) musicSource = host.addComponent(AudioSourceComponent);
     return musicSource;

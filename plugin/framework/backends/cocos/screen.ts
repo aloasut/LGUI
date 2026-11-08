@@ -12,7 +12,8 @@ export function fitDesign(screen: {width: number; height: number}, design: {widt
   return {scale, visible: {x: 0, y: 0, width: screen.width / scale, height: screen.height / scale}};
 }
 
-/** 设计坐标 → 引擎世界坐标（y 向上）。假设：根节点贴在屏幕左上角（T007 校准）。 */
+/** 设计坐标 → 引擎世界坐标（y 向上）。GRoot 按 vanilla 挂载（世界尺寸、scale 1，screenHeight 传 GRoot.height），
+ * 设计区域由内层 stage 缩放并贴在 GRoot 左上角（T007 校准渲染；T008 校准输入——本体被缩放会打偏命中测试）。 */
 export function toWorld(x: number, y: number, screenHeight: number): {x: number; y: number} {
   return {x: x * stage.scale, y: screenHeight - y * stage.scale};
 }

@@ -1,14 +1,14 @@
 // 把 fairygui-cc 的对象包成接口层的 UI 对象。每个对象只包一次（WeakMap 缓存），事件一律返回取消函数。
 // 从 h5 的 objects/index.ts 移植；差异都在注释里标了。
-import {Rect as CcRect} from 'cc';
+import {Rect as CcRect, Vec2} from 'cc';
 import * as fgui from 'fairygui-cc';
 import type {
   PointerInput, Rect, UIObject, UIComponent, UIText, UIInput, UIButton, UIImage, UILoader, UIList, UIController, UITransition, UIProgress, UIGraph, Unsubscribe,
   UILabel, UISlider, UIComboBox, UIMovieClip, UITree, UITreeNode, WheelInput
 } from '../../../core/index';
 import {LgRuntimeError} from '../../../core/index';
-import {stage, toWorld} from '../screen';
-import {toPointerInput} from '../pointer';
+import {stage} from '../screen';
+import {toPointerInput, domWheel} from '../pointer';
 import type {FguiEventOf} from '../pointer';
 import {isComposing} from '../ime';
 
@@ -54,22 +54,38 @@ class CocosObject implements UIObject {
   get rect(): Rect { return {x: this.native.x, y: this.native.y, width: this.native.width, height: this.native.height}; }
   set rect(value: Rect) { this.native.setPosition(value.x, value.y); this.native.setSize(value.width, value.height); }
   onPointer(handler: (event: PointerInput) => void): Unsubscribe {
-    const offs = pointerTypes.map(type => listen(this.native, type, event => handler(toPointerInput(event as FguiEventOf))));
+    const offs = pointerTypes.map(type => listen(this.native, type, event => {
+      // 和 fairygui-dom 的自动指针捕获对齐：按下的控件持续收到 move/end——控件级手势（拖拽、hold）依赖它，
+      // 不捕获的话 move 只给命中目标本身，拖出控件后流就断了（T008d 实测：drag-drop 拖不起来）。
+      if (type === fgui.Event.TOUCH_BEGIN) (event as unknown as {captureTouch?: () => void}).captureTouch?.();
+      const input = toPointerInput(event as FguiEventOf);
+      // 坐标统一成设计单位（÷stage.scale，和 platform 层同一把尺子）：fairy 事件的 pos 是 GRoot 单位，
+      // 控件级事件（本方法）和舞台级事件（platform 的 root 监听）会被手势层当同一条流消费，
+      // 两边单位不一致时 scale≠1 的窗口里每次点击都被算成「移过」、click 全灭（T008c EXACT_FIT 实测）。
+      const k = stage.scale || 1;
+      handler({...input, x: input.x / k, y: input.y / k});
+    }));
     return () => { for (const off of offs) off(); };
   }
-  // 运行库做命中测试：设计坐标换到世界坐标，取最上面的可点控件，往上数到自己是第几层。
+  // 运行库做命中测试：取最上面的可点控件，往上数到自己是第几层。
+  // hitTest 收的是「fairy 空间」的点（y 向下、GRoot 单位）——InputProcessor.updateInfo 在 screenToWorld 之后
+  // 按 rootSize 翻 y 得到的就是它，设计单位 × stage.scale 还原，不做 y 翻转（旧实现走 toWorld 翻 y，
+  // 落点全偏到面板 bg 上、drop 永远不中——T008c 地面真相配对实测：事件 pos 与设计点同值，翻 y 的反而不中）。
   hitDepth(x: number, y: number): number {
-    const hit = fgui.GRoot.inst.hitTest(toWorld(x, y, fgui.GRoot.inst.height), true);
+    const k = stage.scale || 1;
+    const hit = fgui.GRoot.inst.hitTest(new Vec2(x * k, y * k), true);
     if (!hit) return -1;
     let depth = 0;
     for (let o: fgui.GObject | null = hit; o; o = o.parent, depth++) if (o === this.native) return depth;
     return -1;
   }
   onWheel(handler: (event: WheelInput) => void): Unsubscribe {
-    // 引擎的滚轮只有纵向量（mouseWheelDelta）；横向滚动量运行库没透出，记 0。
+    // 增量取 DOM 地面真相（domWheel，正 = 向下，h5 同）：运行库的 mouseWheelDelta 向下滚恒为 0（pointer.ts 注释）。
+    // 事件本身仍用运行库的 MOUSE_WHEEL：命中目标、坐标都是它定的；坐标换算成设计单位（同 onPointer）。
     return listen(this.native, fgui.Event.MOUSE_WHEEL, event => {
       const pos = (event as unknown as FguiEventOf).pos;
-      handler({x: pos.x, y: pos.y, deltaX: 0, deltaY: (event as unknown as FguiEventOf).mouseWheelDelta});
+      const k = stage.scale || 1;
+      handler({x: pos.x / k, y: pos.y / k, deltaX: domWheel.deltaX, deltaY: domWheel.deltaY});
     });
   }
 }
@@ -106,7 +122,8 @@ class CocosComponent extends CocosObject implements UIComponent {
 
 class CocosText extends CocosObject implements UIText {
   constructor(readonly native: fgui.GTextField) { super(native); }
-  get text(): string { return this.native.text; }
+  // 空文本归一成 ''：GTextInput 没输入过时 native.text 是 undefined，规范语义是字符串（headless/h5 同）。
+  get text(): string { return this.native.text ?? ''; }
   set text(value: string) { this.native.text = value; }
   get color(): string { return toHex(this.native.color); }
   set color(value: string) { this.native.color = fromHex(value); }
@@ -115,8 +132,18 @@ class CocosText extends CocosObject implements UIText {
 class CocosInput extends CocosText implements UIInput {
   private prompt = '';
   constructor(readonly native: fgui.GTextInput) { super(native); }
+  // getter 必须显式重复：子类原型上只写 set 会遮蔽父类的 get，读 text 直接 undefined（T008d 实测）。
+  get text(): string { return this.native.text ?? ''; }
   // 文字没变就不写：写一次会把光标挪到最后（同 h5）。
-  set text(value: string) { if (this.native.text !== value) this.native.text = value; }
+  set text(value: string) {
+    if (this.native.text === value) return;
+    this.native.text = value;
+    // cc EditBox 聚焦期间不把程序化文本传到 DOM input（_edTxt 是唯一真值，回写只更新 label）——
+    // 聚焦时直写 _edTxt，让「绑定把 Model 值写回输入框」的回写对正在打字的人生效，
+    // 否则下一个字接在旧文字上、和 h5 的回写语义分裂（T008d input 用例实测）。
+    const edTxt = (this.native as unknown as {_editBox?: {_impl?: {_edTxt?: HTMLInputElement | HTMLTextAreaElement}}})._editBox?._impl?._edTxt;
+    if (edTxt && document.activeElement === edTxt) edTxt.value = value;
+  }
   get promptText(): string { return this.prompt; }
   set promptText(value: string) { this.prompt = value; this.native.promptText = value; }
   // 组字期间不通知，选完通知一次；有的浏览器选完还会再发一次 input，跳过（同 h5 的语义，事件源换成 TEXT_CHANGE）。
@@ -210,8 +237,10 @@ class CocosList extends CocosObject implements UIList {
   get selectedIndex(): number { return this.selected; }
   set selectedIndex(value: number) { this.selected = value; this.native.selectedIndex = value; }
   onClickItem(handler: (index: number) => void): Unsubscribe {
-    return listen(this.native, fgui.Event.CLICK_ITEM, event => {
-      const item = (event as unknown as {initiator: fgui.GObject}).initiator;
+    // CLICK_ITEM 是运行库的 GList.dispatchItemEvent 用 cc 节点事件派发的（_node.emit(CLICK_ITEM, item, evt)），
+    // 监听参数是 (item, evt)，不是带 initiator 的 fairy Event——拿 initiator 会得到 undefined、
+    // childIndex 算出 -1，绑定层按越界静默丢弃（T008c list-rotate 实测，此前从未被测过）。
+    return listen(this.native, fgui.Event.CLICK_ITEM, (item: fgui.GObject) => {
       const index = this.native.childIndexToItemIndex(childIndex(this.native, item));
       this.selected = index;
       handler(index);
@@ -324,8 +353,8 @@ class CocosTree extends CocosObject implements UITree {
   get numItems(): number { return this.native.numChildren; }
   itemAt(index: number): UIComponent | null { return index >= 0 && index < this.native.numChildren ? wrapComponent(this.native.getChildAt(index)) : null; }
   onClickNode(handler: (key: Key) => void): Unsubscribe {
-    return listen(this.native, fgui.Event.CLICK_ITEM, event => {
-      const cell = (event as unknown as {initiator: fgui.GObject}).initiator;
+    // CLICK_ITEM 的 cc 节点事件参数是 (cell, evt)，同 CocosList.onClickItem（T008c tree 实测同病）。
+    return listen(this.native, fgui.Event.CLICK_ITEM, (cell: fgui.GObject) => {
       for (const [node, key] of this.keys) {
         if (node.cell !== cell) continue;
         this.selected = key;

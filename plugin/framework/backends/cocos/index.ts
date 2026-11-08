@@ -1,11 +1,12 @@
 // cocos 后端：fairygui-cc 加 Cocos Creator 引擎 API。从 h5 后端移植（它是基准实现）；差异点都在注释里。
 // 只能在 Cocos Creator 工程里运行（fairygui.mjs import 'cc'）；M1 目标是 Web。
-import {Camera, Canvas, director, Layers, Node, TextAsset} from 'cc';
+import {assetManager, Camera, Canvas, director, Layers, Node, TextAsset} from 'cc';
 import * as fgui from 'fairygui-cc';
 import type {Backend, BackendConfig, Platform, UIComponent, UIObject} from '../../core/index';
 import {LgRuntimeError} from '../../core/index';
 import {createCocosPlatform, bundleReady} from './platform/index';
 import {setComponentName, wrap, wrapComponent} from './objects/index';
+import {installFindParentGuard} from './patches';
 
 const parseUrl = (url: string): [string, string] | null => { const m = /^ui:\/\/([^/]+)\/(.+)$/.exec(url); return m ? [m[1], m[2]] : null; };
 
@@ -23,6 +24,7 @@ export function createCocosBackend(): Backend {
     name: 'cocos',
     async init(config: BackendConfig) {
       if (platform) return; // 幂等：编辑器/预览/一致性桥可能多次调 init，二次调用直接返回
+      installFindParentGuard();
       if (config.defaultFont) fgui.UIConfig.defaultFont = config.defaultFont;
       uiBase = config.uiBase;
       i18nBase = config.i18nBase;
@@ -46,15 +48,21 @@ export function createCocosBackend(): Backend {
       const nativeRoot = new fgui.GRoot();
       (fgui.GRoot as unknown as {_inst: fgui.GRoot})._inst = nativeRoot;
       canvas.addChild(nativeRoot.node);
+      // vanilla 挂载：GRoot 本体保持世界尺寸、scale 1（onWinResize 按 rootSize 设置）。运行库的坐标换算
+      // （updateInfo 按 rootSize 翻 y、GRoot.hitTest→globalToLocal 按 GRoot.height 翻回）都按这个约定——
+      // 本体若被缩放（设计尺寸 + setScale），命中测试的两次翻转单位不一致，全部点击都会打偏（T008 校准发现）。
       nativeRoot.onWinResize();
       if (!nativeRoot.node.parent) {
         const scene = director.getScene();
         if (!scene) throw new LgRuntimeError('LGUI-RT-028', '界面根节点挂不上去：场景还没就绪。', '在场景加载完成后再调用 lgui.app()。');
         scene.addChild(nativeRoot.node);
       }
-      platform = createCocosPlatform(config.projectName, config.uiBase);
-      setComponentName(nativeRoot, 'root');
-      root = wrapComponent(nativeRoot);
+      // 设计缩放由内层 stage 容器承担（setScale + 设计尺寸的 setSize），视图都挂它里面；backend.root 就是它。
+      const stageRoot = new fgui.GComponent();
+      nativeRoot.addChild(stageRoot);
+      platform = createCocosPlatform(config.projectName, config.uiBase, stageRoot);
+      setComponentName(stageRoot, 'root');
+      root = wrapComponent(stageRoot);
     },
     get root(): UIComponent {
       if (!root) throw new LgRuntimeError('LGUI-RT-027', 'cocos 后端还没有启动。', '先调用 backend.init(config)。');
@@ -84,8 +92,33 @@ export function createCocosBackend(): Backend {
       // FairyGUI 的翻译只在组件第一次创建时写进包数据，所以已经加载的包要卸载、重新加载（同 h5）。
       // CC 的 babel loose 模式把 [...set] 编译成 [set]（整个 Set 成为一个元素）——框架里可迭代展开一律用 Array.from（T007 校准结论）。
       const loaded = Array.from(loadedPackages);
+      // 卸载换翻译：CC 的 assetManager.releaseAsset 是**强制释放**（ReleaseManager.tryRelease(asset, force=true)
+      // 跳过引用检查、无条件 destroy），UIPackage.dispose 会把打开中的组件还引用着的纹理当场销毁——
+      // 而调用方的 rebuild 在 swap 之后才跑，这中间的渲染帧拿到已释放的帧直接崩
+      // （gpuDescriptors null / MovieClip frame released，example 独立工程 2026-11-08 实测；引用计数挡不住 force）。
+      // 所以卸载前把包的 _items 偷走（dispose 空转、一个资源都不放），资源暂扣到 rebuild 完成——
+      // rebuild 在 swap 返回后的同一微任务链里同步执行，两帧后旧组件已全部释放，再统一强制释放。
+      const stale: {asset: unknown}[] = [];
+      for (const name of loaded) {
+        const pkg = fgui.UIPackage.getByName(name) as unknown as {_items: {asset: unknown}[] | null} | undefined;
+        if (!pkg?._items) continue;
+        for (const item of pkg._items) if (item.asset) stale.push(item);
+        pkg._items = [];
+      }
       for (const name of loaded) if (fgui.UIPackage.getByName(name)) fgui.UIPackage.removePackage(name);
       for (const name of loaded) await ready().resource.loadPackage(name);
+      if (stale.length) {
+        let frames = 0;
+        const off = platform!.time.onFrame(() => {
+          if (++frames < 2) return;
+          off();
+          for (const item of stale) {
+            const asset = item.asset as Parameters<typeof assetManager.releaseAsset>[0];
+            item.asset = null;
+            assetManager.releaseAsset(asset);
+          }
+        });
+      }
     },
     has(packageName: string, componentName: string): boolean {
       const pkg = fgui.UIPackage.getByName(packageName);
