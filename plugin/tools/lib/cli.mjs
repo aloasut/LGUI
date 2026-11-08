@@ -18,6 +18,7 @@ import {artCut} from './commands/art-cut.mjs';
 import {newModule, newView} from './commands/new.mjs';
 import {editor, editorProps} from './commands/editor.mjs';
 import {unityExport} from './commands/unity-export.mjs';
+import {cocosExport} from './commands/cocos-export.mjs';
 
 // project：'none' 不需要在工程里；'required' 必须在工程里。
 // versionCheck：运行前比对插件和工程的版本（init、doctor、upgrade 不比对）。
@@ -39,6 +40,7 @@ export const registry = [
   {name: 'art split', usage: 'art split <大图> --grid 列x行 --size 宽x高 --pkg 包 --names 名字列表或文件', about: '把 AI 生成的网格大图拆成小图，并缩放到指定尺寸', project: 'required', versionCheck: true, flags: {grid: 'string', size: 'string', pkg: 'string', names: 'string'}, run: artSplit},
   {name: 'art cut', usage: 'art cut <整页图> --pkg 包 --names 名字列表或文件 [--size 宽x高] [--scale 比例] [--pad 像素] [--gap 像素] [--speck 像素] [--defringe 像素]', about: '按透明区域把 AI 生成的一页图集拆成小图：统一缩放、去白边、九宫格重拼、出检查图', project: 'required', versionCheck: true, flags: {pkg: 'string', names: 'string', size: 'string', scale: 'string', pad: 'string', gap: 'string', speck: 'string', defringe: 'string'}, run: artCut},
   {name: 'unity export', usage: 'unity export --to <Unity 工程路径>', about: '导出到 Unity', project: 'required', versionCheck: true, flags: {to: 'string'}, run: unityExport},
+  {name: 'cocos export', usage: 'cocos export --to <Cocos Creator 工程路径>', about: '导出到 Cocos Creator', project: 'required', versionCheck: true, flags: {to: 'string'}, run: cocosExport},
   {name: 'upgrade', usage: 'upgrade', about: '把插件里的新版框架和 Unity 包复制进工程', project: 'required', versionCheck: false, flags: {}, run: upgrade}
 ];
 

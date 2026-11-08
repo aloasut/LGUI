@@ -46,7 +46,8 @@ export const fields = {
   devWatch: {check: value => Array.isArray(value) && value.every(p => typeof p === 'string' && p.length > 0), type: 'lgui dev 额外监视的路径数组（相对工程根目录，比如 ["../Config"]）', default: []},
   editorPort: {check: value => isInt(value, 1) && value <= 65535, type: '端口号 1–65535', default: 4174},
   backend: {check: value => value === 'h5', type: '"h5"', default: 'h5'},
-  unityProject: {check: value => value === null || (typeof value === 'string' && value.length > 0), type: 'Unity 工程路径 | null', default: null}
+  unityProject: {check: value => value === null || (typeof value === 'string' && value.length > 0), type: 'Unity 工程路径 | null', default: null},
+  cocosProject: {check: value => value === null || (typeof value === 'string' && value.length > 0), type: 'Cocos Creator 工程路径 | null', default: null}
 };
 
 // 校验一个已解析的 project.json 对象，补上默认值后返回；有问题一次全部报出（LGUI-CLI-004）。

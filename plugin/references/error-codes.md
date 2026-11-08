@@ -32,6 +32,8 @@ LGUI 的每条报错都带错误码，并写明：哪个文件哪一行（如果
 | `LGUI-CLI-050` | `lgui check` 读不了 `tsconfig.json` | 用 `lgui init` 生成的 `tsconfig.json`，不要改它 |
 | `LGUI-CLI-051` | Unity 工程缺少 embedded 的 PuerTS Core/V8 3.0.3 本地包、使用了目录链接或包缓存，或者 C++ 补丁目标摘要不可信 | 将官方 Core/V8 压缩包解压到工程的 `Packages/com.tencent.puerts.core/` 和 `Packages/com.tencent.puerts.v8/`；保留自己的修改后恢复官方原文件再导出 |
 | `LGUI-CLI-052` | 导出目标不是 Unity 6000.6.x 工程、管理路径使用了文件/目录链接，或目标条目的文件/目录类型不对 | 使用 Unity 6000.6 创建的工程根目录；管理路径使用实际目录和文件，移走同名的错误类型条目 |
+| `LGUI-CLI-053` | 导出目标不是 Cocos Creator 3.8.x 工程，或缺少 fairygui-cc@1.2.2 依赖 | 用 Cocos Creator 3.8 创建工程；在目标工程里 `npm install fairygui-cc@1.2.2` 后再导出 |
+| `LGUI-CLI-054` | cocos export 的管理路径使用了文件/目录链接、路径逃出工程，或目标条目的文件/目录类型不对 | 管理路径使用实际目录和文件，移走同名的错误类型条目 |
 | `TSxxxx` | `lgui check` 报的 TypeScript 类型错误（错误码是 TypeScript 自己的） | 按提示改；控件名和类型以 `lgui ui list` 为准 |
 | `LGUI-CLI-060` | `lgui verify` 没找到 Chrome 或 Edge | 装一个 Chrome 或 Edge |
 | `LGUI-CLI-061` | `--size` 写的验证尺寸不存在 | 用工程配置 `verifySizes` 里的名字 |

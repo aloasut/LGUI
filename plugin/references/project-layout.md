@@ -50,6 +50,7 @@ MyGame/
 | `editorPort` | 端口号 1–65535 | `4174` | `lgui editor` 的端口。浏览器按地址（含端口）记住授权过的 `ui/` 文件夹，所以端口固定；改了端口要在编辑器里重新授权。被占用时报 `LGUI-CLI-110` |
 | `backend` | `"h5"` | `"h5"` | 默认后端 |
 | `unityProject` | 路径 \| `null` | `null` | 导出过的 Unity 工程路径，由 `lgui unity export` 写入 |
+| `cocosProject` | 路径 \| `null` | `null` | 导出过的 Cocos Creator 工程路径，由 `lgui cocos export` 写入 |
 
 默认的 6 组验证尺寸（单位：CSS 像素）：
 

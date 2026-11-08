@@ -1,26 +1,79 @@
 {
   "name": "inventory",
   "lguiVersion": "0.3.0",
-  "designSize": {"landscape": {"width": 1920, "height": 1080}, "portrait": {"width": 1080, "height": 1920}},
+  "designSize": {
+    "landscape": {
+      "width": 1920,
+      "height": 1080
+    },
+    "portrait": {
+      "width": 1080,
+      "height": 1920
+    }
+  },
   "orientation": "both",
   "verifySizes": [
-    {"name": "desktop", "width": 1920, "height": 1080},
-    {"name": "ultrawide", "width": 2560, "height": 1080},
-    {"name": "phone-landscape", "width": 844, "height": 390, "safeArea": {"top": 0, "right": 47, "bottom": 21, "left": 47}},
-    {"name": "tablet", "width": 1024, "height": 768},
-    {"name": "phone-portrait", "width": 390, "height": 844, "safeArea": {"top": 47, "right": 0, "bottom": 34, "left": 0}},
-    {"name": "tablet-portrait", "width": 768, "height": 1024}
+    {
+      "name": "desktop",
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "name": "ultrawide",
+      "width": 2560,
+      "height": 1080
+    },
+    {
+      "name": "phone-landscape",
+      "width": 844,
+      "height": 390,
+      "safeArea": {
+        "top": 0,
+        "right": 47,
+        "bottom": 21,
+        "left": 47
+      }
+    },
+    {
+      "name": "tablet",
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "name": "phone-portrait",
+      "width": 390,
+      "height": 844,
+      "safeArea": {
+        "top": 47,
+        "right": 0,
+        "bottom": 34,
+        "left": 0
+      }
+    },
+    {
+      "name": "tablet-portrait",
+      "width": 768,
+      "height": 1024
+    }
   ],
-  "languages": ["zh-CN", "en"],
+  "languages": [
+    "zh-CN",
+    "en"
+  ],
   "defaultLanguage": "zh-CN",
   "keyMap": {},
-  "uiCache": {"keepClosedViews": 0},
+  "uiCache": {
+    "keepClosedViews": 0
+  },
   "requestErrorToast": true,
   "requestTimeoutMs": 10000,
   "placeholder": "ui://Common/placeholder",
-  "sounds": {"click": "ui://Common/click"},
+  "sounds": {
+    "click": "ui://Common/click"
+  },
   "defaultFont": null,
   "devPort": 4173,
   "backend": "h5",
-  "unityProject": null
+  "unityProject": null,
+  "cocosProject": "../../../../../../../tmp/lgui-exp-real/cc"
 }
