@@ -1,0 +1,59 @@
+---
+description: "lgui 的 Cocos Creator 接入：cocos 后端（fairygui-cc bundle + EXACT_FIT 设计适配）、lgui cocos export 导出管线（bundle/框架子集/模板场景/bundle meta）、Creator 预览与 MCP 代理工具（funplay open_scene/preview/截图/运行时检查）；接入 Cocos 工程、改 cocos 后端或导出管线前必读"
+kind: architecture
+code:
+  paths:
+    - plugin/framework/backends/cocos/index.ts
+    - plugin/framework/backends/cocos/objects/index.ts
+    - plugin/framework/backends/cocos/platform/index.ts
+    - plugin/framework/backends/cocos/pointer.ts
+    - plugin/framework/backends/cocos/patches.ts
+    - plugin/framework/backends/cocos/project-template/*
+    - plugin/tools/lib/commands/cocos-export.mjs
+    - lgui-cocos-mcp/mcp/server.mjs
+    - tests/cocos/run-conformance.mjs
+    - tests/cocos/README.md
+relations:
+  related:
+    - runtime/framework.mdx
+    - testing/layers.mdx
+    - capabilities.mdx
+---
+
+# Cocos Creator 接入
+
+## 职责与所有权边界
+
+`plugin/framework/backends/cocos/` 实现 Backend/Platform 契约（引擎边界归 [runtime/framework.mdx](../runtime/framework.mdx)），基于官方 npm 包 `fairygui-cc@1.2.2`（fork 的 dist 类顺序损坏，不能用）。`plugin/tools/lib/commands/cocos-export.mjs` 是导出命令（决策 005）；`lgui-cocos-mcp/mcp/server.mjs` 是 MCP server（决策 006，收口 Q5）；`tests/cocos/run-conformance.mjs` 是一致性运行器（15 用例与 headless 逐字段深比较，全绿）。
+
+## 执行流
+
+- **导出**（`lgui cocos export --to <CC 工程>`）：目标校验 CC 3.8.x + fairygui-cc@1.2.2（LGUI-CLI-053）→ staging 两段式 → 五类生成物整目录替换（lgui-ui 含 bundle meta、lgui-framework、ui-types、lgui-boot、app-src 别名按深度重写）+ 模板场景缺失才创建（LGUI-CLI-054）。工程 `package.json` 的 `creator.version` 与 `dependencies['fairygui-cc']` 是校验条件。
+- **挂载约定**：GRoot vanilla 挂载（scale 1、尺寸 = rootSize = 引擎可视区），设计适配由内层 stageRoot 独自承担；引擎设计分辨率由后端每次 resize 按窗口重设 EXACT_FIT，`platform.size()` 读 `ccScreen.windowSize`（`view.getVisibleSize()` 是陈值）。工程设计分辨率应与 `.lgui/project.json` 的 `designSize.landscape` 一致。
+- **一致性运行器**：`node tests/cocos/run-conformance.mjs [--build]`，15 用例与 headless deep-equal；Creator CLI 构建成功也常退出 36（警告计 exit 码），成功判据是「build Task Finished + 产物存在」。
+
+## 决策与不变量（实测雷清单，改动前必读）
+
+1. **CLICK_ITEM 是 cc 节点事件**：fairygui-cc 的 `GList.dispatchItemEvent` 用 `_node.emit(CLICK_ITEM, item, evt)` 派发，监听参数是 `(item, evt)` 不是带 `initiator` 的 fairy Event——列表 select / 树点击在此前从未被测过，读错参数即静默丢弃（objects/index.ts 已修）。
+2. **键盘监听必须 capture**：cc 引擎在 GameCanvas 上的 keydown 处理器 `stopPropagation + preventDefault`，画布聚焦后 document 冒泡监听收不到（Esc 关弹窗失效）——键盘走 document capture 阶段。
+3. **滚轮增量取 DOM 地面真相**（`pointer.ts domWheel`）：运行库 `mouseWheelDelta = Math.max(scrollX, scrollY)`，向下滚恒为 0。
+4. **坐标空间三定律**：① fairy hitTest 收「GRoot 单位、y 向下」点（updateInfo 翻 y 后的空间），hitDepth 别走 toWorld 翻 y；② 控件级与舞台级指针事件必须同一单位（都 ÷ stage.scale 报设计单位），混用时 scale≠1 的窗口 click 全灭；③ 引擎设计分辨率跟窗口 EXACT_FIT + size() 读 windowSize——转屏/异形窗口才自洽。
+5. **输入分类以 DOM pointerType 为准**（`domPointer`）：引擎会把鼠标点击合成触摸。副作用：`visibleOn: ['touch']` 的元素在鼠标输入下隐藏是设计内行为。
+6. **输入框回写**：cc EditBox 聚焦期间不把程序化文本传到 DOM input（`_edTxt` 是唯一真值）——`CocosInput.set text` 聚焦时直写 `_edTxt`，否则回写对正在打字的人失效、与 h5 语义分裂。
+7. **预览编译链（SystemJS/packer-driver）下 `Camera.Projection`/`Layers.Enum` 静态命名空间是 undefined**（构建链正常）——枚举从运行时构造器取 + 数值兜底（ORTHO=0、SOLID_COLOR=7、UI_2D=1<<25）。
+8. **findParent 对已销毁对象抛 null.parent**（clickTest 在 down/up 间目标销毁时触发）→ `patches.ts` installFindParentGuard 兜底。
+9. **空文本归一 `''`**（GTextInput 未输入时 native.text 是 undefined）；输入框回写聚焦直写 `_edTxt`。
+10. **工程与环境**：工程 designResolution 应等于 LGUI 设计尺寸；导出工程的 `lgui-ui` 目录**必须带 bundle 文件夹 meta**（`isBundle + bundleName`，缺失则 bundle 加载 404、启动链挂死）；Creator CLI 构建成功也常退出 36（判据用「Finished + 产物」）；Creator GUI 开着会占工程锁、CLI 构建挂死；**export 的文件替换不触发 Creator 脚本重编译**——重导出后要重启 Creator。
+
+## 实机 Play 联调（T011，全通）
+
+funplay-cocos-mcp extension（testbed vendored，MIT）装进导出工程 + 工程根 `funplay-cocos-mcp.config.json` 预设固定端口（core profile 无预览工具，配 `toolProfile: 'full'`）→ Creator GUI 5s 起 HTTP MCP → `open_scene` 打开目标场景（**Creator CLI 启动的编辑器当前场景为空，预览空场景会黑屏——必须先 open_scene**，`cocos_preview` 工具已固化 scene 参数）→ `run_project_preview`（browser 模式起 7456）→ playwright 驱动：boot/五层栈/界面渲染全通。工具调用带 `expected_context`（initialize.funplay.context 的拼接串）。
+
+## MCP server（lgui-cocos-mcp/mcp）
+
+stdio 最小 JSON-RPC（无 SDK），17 个白名单工具包装 lgui CLI `--json`（口令只有 CLI 一份）：check/ui_list/test/verify/i18n_extract/new_module/new_view/art_split/art_cut/cocos_export + funplay 代理（cocos_preview/cocos_screenshot/cocos_eval）。**CLI 子进程树输出后不退出**（stdin pipe + esbuild/OpenFairyGUI 句柄，kill CLI 杀不掉孙进程）——runCli 把 stdout/stderr 重定向到临时文件、轮询读内容、JSON 到手即 SIGKILL；spawn stdin 必须 ignore。dev 实时回路（start/shot/stop）已入白名单，测试场景下首个请求可能触发生成链挂起（ECONNRESET，独立问题，数据在案），看效果用 lgui_verify。
+
+## 跨主题契约与变更后果
+
+- Backend/Platform 契约与手势统一识别归 [runtime/framework.mdx](../runtime/framework.mdx)；一致性用例（cases/）与 harness 三端共用，改用例要同时过 headless/h5/cocos 三端比对。
+- 顶层能力清单见 [capabilities.mdx](../capabilities.mdx)。

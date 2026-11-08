@@ -1,0 +1,37 @@
+---
+description: "LGUI 作为游戏 UI 框架的高级能力索引：单源多端与一致性、五层界面栈、横竖屏换版、动效、统一手势、虚拟列表、拖放、红点、艺术字、i18n 数字缩写、声音、安全区、IME、失败语义、headless 测试钩子、AI 工具链；评估「LGUI 能不能做 X」或向使用者介绍能力面时必读"
+kind: guide
+code:
+  paths:
+    - plugin/references/capabilities.md
+    - plugin/references/ui-spec.md
+    - plugin/references/mvc-spec.md
+    - plugin/framework/mvc/ui/manager.ts
+    - plugin/framework/mvc/input/gestures.ts
+    - lgui-cocos-mcp/mcp/server.mjs
+relations:
+  related:
+    - runtime/framework.mdx
+    - cocos/pipeline.mdx
+    - unity/export-pipeline.mdx
+    - testing/layers.mdx
+---
+
+# 游戏 UI 高级能力索引
+
+权威原文是 `plugin/references/capabilities.md`（面向使用者的能力清单，每条指向对应规范）；本文只记录索引与「评估能力时容易误判」的三个事实。
+
+## 能力域 → 权威出处
+
+- **单源多端与一致性**：`ui/` 一个源分产网页/Unity/Cocos Creator/headless 四后端；一致性运行器逐字段深比较（cocos 侧细节见 [cocos/pipeline.mdx](cocos/pipeline.mdx)）。
+- **界面栈与生命周期**：五层栈、激活/遮挡语义、modal 排队、包引用计数、自动清理——执行模型见 `runtime/framework.mdx`。
+- **横竖屏/动效/手势/i18n/失败语义**：写法规范见 `plugin/references/ui-spec.md` 与 mvc-spec.md，执行模型见 runtime/framework.mdx。
+- **游戏特性**：拖放、红点、艺术字、声音、安全区、IME、虚拟列表滚动保留——capabilities.md「游戏特性」「输入与文本」两节。
+- **测试钩子**：headless 后端（不渲染可测、假时钟确定性快照）+ `t.*` 操作语义——见 [testing/layers.mdx](testing/layers.mdx)。
+- **AI 工具链**：MCP server（17 工具）+ 一致性运行器 + export——见 [cocos/pipeline.mdx](cocos/pipeline.mdx)。
+
+## 评估能力时的三个易误判事实
+
+1. **「引擎无关」是架构承诺且有测试背书**：手势在框架统一识别、数字缩写用内置规则不用 Intl——各端显示与手感的一致性由四方一致性运行器逐字段保证，不是文档声明。
+2. **headless 能测的不只是逻辑**：控件属性、可见性、界面栈、列表项文字都在快照里；`t.*` 操作（点击/拖拽/打字/滑条/下拉框/安全区注入）语义与真实后端一致，UI 开发的大部分验证不需要打开引擎。
+3. **Creator 预览的渲染可见性问题不影响构建产物**：lgui dev 的一个已知排障项（见 cocos/pipeline.mdx 与 t011 证据）只影响 Creator 预览视图；web-mobile 构建产物的渲染与交互已完整验证，`lgui verify` 的横竖屏截图是稳定的效果验收路径。

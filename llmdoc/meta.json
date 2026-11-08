@@ -22,6 +22,12 @@
     },
     "testing/layers.mdx": {
       "validatedRevision": "c31fde933cb0d758597891851ae032ca7f5eeb1d"
+    },
+    "capabilities.mdx": {
+      "validatedRevision": "c31fde933cb0d758597891851ae032ca7f5eeb1d"
+    },
+    "cocos/pipeline.mdx": {
+      "validatedRevision": "c31fde933cb0d758597891851ae032ca7f5eeb1d"
     }
   },
   "convergence": {
