@@ -26,6 +26,12 @@
 
 ~~实机 Play 联调待 Creator GUI 会话~~ **当日已做实机联调，部分通过，见下**。
 
+## 2026-11-09（续）：lgui_dev 挂起在干净环境复现——撤下决定成立
+
+`lgui_dev` 三工具（start/shot/stop + 生命周期管理）实现保留在 server.mjs，但**未入白名单**：受控复现确认挂起是真实问题——干净环境（禁 sandbox、pkill 全部残留、单测试运行）下 dev_start 依然「30s 未就绪 ECONNRESET」，dev 输出显示 listen 成功（预览地址）且 generate 完成（「已重新生成界面」），但 HTTP 请求全部被 reset——**事件循环活着（能输出）而 HTTP accept/handler 不工作**。已排除：spawn stdio 三种形态（pipe/文件/三路开放 pipe——dev 里 esbuild service 走继承 stdio 的假说也不成立，pipe 下同样复现）、sandbox、残留进程占端口。
+
+后续排障入口：dev/index.mjs 的 http handler（Host 校验/SSE/serveBuilt）+ generate 链在「被 MCP server spawn 的 dev 进程」里的行为差异；对照基准：同命令由 shell 直接 spawn 时 518ms 就绪且轮询 200。看效果用 `lgui_verify`（稳定）。
+
 ## 2026-11-08（续）：实机 Play 联调——启动链全通，预览渲染对齐待修
 
 > **【根因更正（2026-11-08 晚，Owner 点破）】**「黑屏」的真正原因：**Creator CLI 启动的编辑器当前场景是空的，预览跑的是空场景而非 main.scene**——backend init 的兜底（自动建 Canvas/相机）让逻辑链活着（`__lgui`/五层栈都在），但渲染的场景不对。用 funplay `open_scene` 打开 main（uuid 96ae589d-7292-484b-bce3-0f044916b0a3）后再预览，**画面完整渲染（Traveler's Camp 营地主界面：标题/Bag/Shop/Rewards 按钮/红点/限时活动条/背景图，60fps），截图 /tmp/t011-creator-play.png**。下面「渲染可见性」小节的整段深挖（相机顺序/清屏/视野/Canvas 接管排除）针对的是错误前提，数据保留作废；ORTHO 枚举修复仍有效（backend 自动建 Canvas 分支的真实中断）。固化：`cocos_preview` 工具加 `scene` 参数（转发前先 `open_scene`），单测断言 open+preview 两次调用序列（8/8）。
