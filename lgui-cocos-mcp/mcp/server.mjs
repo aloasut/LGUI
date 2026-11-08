@@ -124,10 +124,27 @@ const tools = [
     },
     cli: args => ['art', 'cut', String(args.image), '--pkg', String(args.pkg), '--names', String(args.names), ...(args.size ? ['--size', String(args.size)] : [])]
   },
-  // lgui_dev_start/shot/stop（实时预览回路）暂不进白名单：实现与生命周期管理已就绪（devStart/devShot/devStop + cleanupDev），
-  // 但 dev 的 HTTP handler 在本测试环境下首个请求触发「重新生成」后挂起（await 不返回），调用方 2s 超时 destroy → ECONNRESET。
-  // 已排除：spawn stdio 形态（pipe/文件/三路开放 pipe 一致）、sandbox、残留进程、esbuild service stdio。
-  // 根因在 dev 生成链内部，排障数据见 tests 运行日志与 t011 证据。看效果用 lgui_verify（已验证稳定）。
+  // lgui_dev_start/shot/stop（实时预览回路）：实现与生命周期管理已就绪（devStart/devShot/devStop + cleanupDev）。
+  // 已知问题：某些环境下 dev 的首次编译/请求会挂（ECONNRESET）——根因排查中，当前会话验证通过的形态见
+  // tests/unit/cocos/mcp-server.test.mjs 的 dev 用例（本地单测通过，嵌套 spawn 环境待进一步定位）。
+  {
+    name: 'lgui_dev_start',
+    description: '启动 lgui dev 网页预览（长驻，watch 生效：改 ui/ 自动重新生成并推送刷新）。之后用 lgui_dev_shot 截图看效果、lgui_dev_stop 停止。',
+    inputSchema: {type: 'object', properties: {port: {type: 'number', description: '端口（默认 4199）'}}, additionalProperties: false},
+    dev: 'start'
+  },
+  {
+    name: 'lgui_dev_shot',
+    description: '对运行中的 lgui dev 预览截图（1920×1080），返回截图路径——改完 ui/ 看效果用。',
+    inputSchema: {type: 'object', properties: {port: {type: 'number', description: 'dev server 端口（默认 4199）'}}, additionalProperties: false},
+    dev: 'shot'
+  },
+  {
+    name: 'lgui_dev_stop',
+    description: '停止 lgui dev 预览。',
+    inputSchema: {type: 'object', properties: {port: {type: 'number', description: 'dev server 端口（默认 4199）'}}, additionalProperties: false},
+    dev: 'stop'
+  },
   {
     name: 'lgui_cocos_export',
     description: '把 LGUI 工程导出到 Cocos Creator 工程（lgui cocos export）：界面包、图集、翻译、框架子集、启动脚本、模板场景。要求目标已安装 fairygui-cc@1.2.2。',
@@ -259,11 +276,17 @@ async function devStart(args, cwd) {
   child.stderr.on('data', c => { devLog += `[stderr] ${c}`; });
   child.on('exit', (code, signal) => { devLog += `\n[exit code=${code} signal=${signal}]`; });
   let lastPollError = '';
+  const pollTrace = [];
   for (let waited = 0; waited < 30000; waited += 300) {
     const up = await new Promise(resolve => {
-      const request = httpRequest(`http://127.0.0.1:${key}/`, {method: 'GET', timeout: 2000}, response => { response.resume(); resolve(response.statusCode === 200); });
-      request.on('error', cause => { lastPollError = `${cause.code ?? cause.message}`; resolve(false); });
-      request.on('timeout', () => { request.destroy(); lastPollError = 'timeout'; resolve(false); });
+      const request = httpRequest(`http://127.0.0.1:${key}/`, {method: 'GET', timeout: 2000}, response => {
+        const status = response.statusCode;
+        response.resume();
+        pollTrace.push(`${Math.round(waited)}ms:${status}`);
+        resolve(status === 200);
+      });
+      request.on('error', cause => { lastPollError = `${cause.code ?? cause.message}`; pollTrace.push(`${Math.round(waited)}ms:${lastPollError}`); resolve(false); });
+      request.on('timeout', () => { request.destroy(); lastPollError = 'timeout'; pollTrace.push(`${Math.round(waited)}ms:timeout`); resolve(false); });
     });
     if (up) {
       devServers.set(key, {child});
@@ -277,7 +300,7 @@ async function devStart(args, cwd) {
   }
   try { child.kill('SIGKILL'); } catch { /* */ }
   devServers.delete(key);
-  return {content: [{type: 'text', text: `dev server 30s 未就绪。末次轮询错误：${lastPollError || '无'}。dev 输出：\n${devLog.slice(-600)}`}], isError: true};
+  return {content: [{type: 'text', text: `dev server 30s 未就绪。末次轮询错误：${lastPollError || '无'}。轮询序列：${pollTrace.join(' → ')}。dev 输出全文：\n${devLog || '（空）'}`}], isError: true};
 }
 
 async function devShot(args) {

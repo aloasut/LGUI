@@ -78,7 +78,7 @@ test('MCP：tools/list 返回五个白名单工具，全部带 inputSchema', asy
   await s.send('initialize', {});
   const list = await s.send('tools/list');
   const names = list.result.tools.map(t => t.name).sort();
-  assert.deepEqual(names, ['cocos_eval', 'cocos_preview', 'cocos_screenshot', 'lgui_art_cut', 'lgui_art_split', 'lgui_check', 'lgui_cocos_export', 'lgui_i18n_extract', 'lgui_new_module', 'lgui_new_view', 'lgui_spec', 'lgui_test', 'lgui_ui_list', 'lgui_verify']);
+  assert.deepEqual(names, ['cocos_eval', 'cocos_preview', 'cocos_screenshot', 'lgui_art_cut', 'lgui_art_split', 'lgui_check', 'lgui_cocos_export', 'lgui_dev_shot', 'lgui_dev_start', 'lgui_dev_stop', 'lgui_i18n_extract', 'lgui_new_module', 'lgui_new_view', 'lgui_spec', 'lgui_test', 'lgui_ui_list', 'lgui_verify']);
   for (const tool of list.result.tools) {
     assert.equal(tool.inputSchema.type, 'object', tool.name);
     assert.ok(tool.description.length > 10, tool.name);
