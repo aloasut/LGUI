@@ -296,7 +296,7 @@ async function devStart(args, cwd) {
     }
     if (child.exitCode !== null) {
       devServers.delete(key);
-      return {content: [{type: 'text', text: `lgui dev 提前退出（code ${child.exitCode}），输出已丢弃。`}], isError: true};
+      return {content: [{type: 'text', text: `lgui dev 提前退出（code ${child.exitCode}）。输出：\n${devLog.slice(-800)}`}], isError: true};
     }
     await new Promise(resolve => setTimeout(resolve, 300));
   }

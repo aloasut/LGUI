@@ -35,6 +35,7 @@ T010（M2）：把 lgui CLI 包装成 MCP 工具，给 MCP 宿主（ZCode/Claude
 | `lgui_art_split` | `art split <图> --grid --size --pkg --names` | 把 AI 生成的网格大图拆成小图进包 |
 | `lgui_art_cut` | `art cut <图> --pkg --names [--size]` | 按透明区域把 AI 生成的一页图集拆成小图进包 |
 | `lgui_cocos_export` | `cocos export --to <路径>` | 导出到 Cocos Creator 工程（参数 `to` 必填） |
+| `lgui_dev_start` / `lgui_dev_shot` / `lgui_dev_stop` | `lgui dev` | **实验性**：实时预览回路（启动 / 1920×1080 截图 / 停止）。已知限制：被 MCP server spawn 的 dev 进程在部分环境下 HTTP 请求挂起（事件循环阻塞，见 t011 证据），未定位前请优先用 `lgui_verify` |
 
 | `cocos_preview` | funplay `run_project_preview` | **启动游戏**：Creator 里启动运行时预览（gameView/browser/simulator）。需 Creator 已开工程并启用 Funplay > MCP Server（env `FUNPLAY_MCP_URL`，默认 `http://127.0.0.1:8765/`） |
 | `cocos_screenshot` | funplay `capture_game_screenshot` | 对 Game 预览区截图，返回路径 |

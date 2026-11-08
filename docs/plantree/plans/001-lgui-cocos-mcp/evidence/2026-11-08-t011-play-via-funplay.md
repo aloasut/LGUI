@@ -32,6 +32,8 @@
 
 后续排障入口：dev/index.mjs 的 http handler（Host 校验/SSE/serveBuilt）+ generate 链在「被 MCP server spawn 的 dev 进程」里的行为差异；对照基准：同命令由 shell 直接 spawn 时 518ms 就绪且轮询 200。看效果用 `lgui_verify`（稳定）。
 
+**2026-11-09 补：干净环境（禁 sandbox + 清残留 + 单测试）下稳定复现**——轮询序列全程 `timeout → ECONNRESET` 交替（连接挂起 2s 被客户端放弃；ECONNRESET 是客户端 destroy 的自伤记录，非服务器主动 reset）。**决定性对照**：同一时刻、同一端口，外部脚本进程连接 **200/200**、server 进程内连接持续挂起——**问题定性为「dev 进程事件循环在被 MCP server spawn 的环境下阻塞」**（listen 在、accept 后 handler 永不响应）。已彻底排除：spawn stdio 三种形态、sandbox、残留进程占端口、esbuild service stdio、连接复用。修复需引擎级调试（dev 进程 `--inspect` 观察事件循环/系统调用级抓包），dev 三工具保持未入白名单，看效果用 `lgui_verify`。
+
 ## 2026-11-08（续）：实机 Play 联调——启动链全通，预览渲染对齐待修
 
 > **【根因更正（2026-11-08 晚，Owner 点破）】**「黑屏」的真正原因：**Creator CLI 启动的编辑器当前场景是空的，预览跑的是空场景而非 main.scene**——backend init 的兜底（自动建 Canvas/相机）让逻辑链活着（`__lgui`/五层栈都在），但渲染的场景不对。用 funplay `open_scene` 打开 main（uuid 96ae589d-7292-484b-bce3-0f044916b0a3）后再预览，**画面完整渲染（Traveler's Camp 营地主界面：标题/Bag/Shop/Rewards 按钮/红点/限时活动条/背景图，60fps），截图 /tmp/t011-creator-play.png**。下面「渲染可见性」小节的整段深挖（相机顺序/清屏/视野/Canvas 接管排除）针对的是错误前提，数据保留作废；ORTHO 枚举修复仍有效（backend 自动建 Canvas 分支的真实中断）。固化：`cocos_preview` 工具加 `scene` 参数（转发前先 `open_scene`），单测断言 open+preview 两次调用序列（8/8）。
