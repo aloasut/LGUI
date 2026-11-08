@@ -279,7 +279,9 @@ async function devStart(args, cwd) {
   const pollTrace = [];
   for (let waited = 0; waited < 30000; waited += 300) {
     const up = await new Promise(resolve => {
-      const request = httpRequest(`http://127.0.0.1:${key}/`, {method: 'GET', timeout: 2000}, response => {
+      // agent: false 禁用 keep-alive——dev 端 keepAliveTimeout 关闭空闲连接后，client 池里的坏 socket
+      // 被复用就是 ECONNRESET（T011 实测：独立 Chrome 正常、node http 轮询全 reset）。
+      const request = httpRequest(`http://127.0.0.1:${key}/`, {method: 'GET', timeout: 2000, agent: false}, response => {
         const status = response.statusCode;
         response.resume();
         pollTrace.push(`${Math.round(waited)}ms:${status}`);
