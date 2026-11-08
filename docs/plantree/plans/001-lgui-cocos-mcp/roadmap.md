@@ -27,13 +27,13 @@
 
 ## In Progress
 
-- M1/T008/T009（实机闭环）/T010/T011 全部落地。四方中 unity 侧见 tests/unity（另行验证）。
+- M1/T008/T009（实机闭环）/T010/**T011（实机 Play 联调部分通过：boot 链 + 五层栈 + 渲染在 Creator Play 里全通；预览编译链静态枚举坑已修；预览面板 1080×1080 视口黑屏对齐待修）**。四方中 unity 侧见 tests/unity（另行验证）。
+- 全部改动已分 7 个提交落在分支 lgui/cocos-backend-m1；**推送/PR 须 Owner 批准**。
 
 ## Next
 
-- T011 实机 Play 联调（Creator GUI 会话：装 extension → 预览 → cocos_eval 读快照 + 截图）
+- 预览渲染对齐：Creator 预览面板视口（fitHeight 1080×1080）与 LGUI 设计适配的黑屏问题（含预览面板模拟分辨率/坐标点击换算，归 T011 尾巴）
 - M2 工具面按使用反馈扩充（editor props 中转、art split/cut 等）
-- 全部改动统一 review 后走提交流程（分支 lgui/cocos-backend-m1，推送/PR 须 Owner 批准）
 
 ## Deferred
 

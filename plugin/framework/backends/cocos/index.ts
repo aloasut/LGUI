@@ -40,9 +40,14 @@ export function createCocosBackend(): Backend {
         const camNode = new Node('Camera');
         canvas.addChild(camNode);
         const cam = camNode.addComponent(Camera);
-        cam.projection = Camera.Projection.ORTHO;
-        cam.clearFlags = Camera.ClearFlag.SOLID_COLOR;
-        cam.visibility = Layers.Enum.UI_2D;
+        // 枚举从运行时构造器取并兜底（ORTHO=0、SOLID_COLOR=7，cc 3.8 引擎源码确认）：预览编译链（SystemJS）下
+        // `Camera.Projection` 静态命名空间可能是 undefined、构建链正常——类的静态嵌套枚举跨编译链不稳定（T011 Creator 预览实测）。
+        const camCtor = cam.constructor as unknown as {Projection?: {ORTHO: number}; ClearFlag?: {SOLID_COLOR: number}};
+        cam.projection = camCtor.Projection?.ORTHO ?? 0;
+        cam.clearFlags = camCtor.ClearFlag?.SOLID_COLOR ?? 7;
+        // Layers.Enum.UI_2D 同类静态链兜底（1 << 25 = 33554432，cc 引擎 Layers 定义）。
+        const layersEnum = (Layers as unknown as {Enum?: {UI_2D?: number}}).Enum;
+        cam.visibility = layersEnum?.UI_2D ?? 33554432;
         cam.orthoHeight = 540; // 半屏高默认值；对齐由 onWinResize/Canvas 组件接管
       }
       const nativeRoot = new fgui.GRoot();
