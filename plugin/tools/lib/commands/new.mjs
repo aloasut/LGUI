@@ -58,7 +58,8 @@ function writeUi(root, pkg, comp, pattern) {
   const entries = [`    <component id="${ids.COMPID}" name="${comp}.xml" path="/" exported="true"/>`, `    <component id="${ids.PORTRAITID}" name="${comp}@portrait.xml" path="/" exported="true"/>`];
   if (withItem) entries.push(`    <component id="${ids.ITEMID}" name="${comp}Item.xml" path="/" exported="true"/>`);
   if (existing) fs.writeFileSync(descriptor, fs.readFileSync(descriptor, 'utf8').replace(/(\s*)<\/resources>/, `\n${entries.join('\n')}$1</resources>`));
-  else fs.writeFileSync(descriptor, `<?xml version="1.0" encoding="utf-8"?>\n<packageDescription id="${pkgId}">\n  <resources>\n${entries.join('\n')}\n  </resources>\n</packageDescription>\n`);
+  // 新包按编辑器保存的格式写（带空的 <publish>），编辑器第一次保存时不会再改这个文件
+  else fs.writeFileSync(descriptor, `<?xml version="1.0" encoding="utf-8"?>\n<packageDescription id="${pkgId}">\n  <resources>\n${entries.join('\n')}\n  </resources>\n  <publish name="${pkg}">\n  </publish>\n</packageDescription>\n`);
   return files;
 }
 

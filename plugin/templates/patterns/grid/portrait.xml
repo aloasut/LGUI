@@ -7,10 +7,10 @@
     <graph id="n4" name="safe" xy="0,0" size="1080,1920" touchable="false">
       <relation target="" sidePair="width-width,height-height"/>
     </graph>
-    <text id="n1" name="title" xy="60,36" size="700,64" fontSize="44" color="#ffffff" vAlign="middle" autoSize="shrink" singleLine="true" text="标题">
+    <text id="n1" name="title" xy="60,36" size="700,64" text="标题" fontSize="44" color="#ffffff" vAlign="middle" autoSize="shrink" singleLine="true">
       <relation target="n4" sidePair="left-left,top-top"/>
     </text>
-    <component id="n2" name="closeButton" pkg="{{COMMONID}}" src="{{BUTTONID}}" xy="780,32" size="240,72">
+    <component id="n2" name="closeButton" src="{{BUTTONID}}" xy="780,32" size="240,72" pkg="{{COMMONID}}">
       <relation target="n4" sidePair="right-right,top-top"/>
       <Button title="关闭"/>
     </component>

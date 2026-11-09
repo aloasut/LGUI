@@ -23,9 +23,30 @@ function buttonSound(model, attrs = {}) {
   return p;
 }
 
+// 图片、加载器的填充方式：XML 里写的名字 → 接口层的名字（和 FairyGUI 的 FillMethod 一样）。
+const FILL_METHODS = {none: 'none', hz: 'horizontal', vt: 'vertical', radial90: 'radial90', radial180: 'radial180', radial360: 'radial360'};
+const pair = (value, fallback) => { const [x, y] = (value ?? '').split(',').map(Number); return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : fallback; };
+
+// 代码补间读写的初始值（只放和默认值不一样的）：轴心、缩放、旋转、透明度；文字的颜色、字号；图片、加载器、序列帧的着色；图片、加载器的填充。
+function lookOf(child) {
+  const a = child.attrs;
+  const p = {};
+  if (a.pivot) p.pivot = pair(a.pivot, [0, 0]);
+  if (a.scale) p.scale = pair(a.scale, [1, 1]);
+  if (a.rotation) p.rotation = Number(a.rotation);
+  if (a.alpha !== undefined) p.alpha = Number(a.alpha);
+  if (['text', 'richtext', 'input'].includes(child.kind)) { p.color = a.color ?? '#000000'; p.fontSize = Number(a.fontSize ?? 12); }
+  if (['image', 'loader', 'movieclip'].includes(child.kind) && a.color) p.color = a.color;
+  if (['image', 'loader'].includes(child.kind) && a.fillMethod && a.fillMethod !== 'none') {
+    p.fillMethod = FILL_METHODS[a.fillMethod] ?? 'none';
+    p.fillAmount = Number(a.fillAmount ?? 100) / 100;
+  }
+  return p;
+}
+
 function props(child, model) {
   const a = child.attrs;
-  const p = {visible: bool(a.visible, true), enabled: !bool(a.grayed, false), touchable: bool(a.touchable, true)};
+  const p = {visible: bool(a.visible, true), enabled: !bool(a.grayed, false), touchable: bool(a.touchable, true), ...lookOf(child)};
   if (a.customData) p.customData = a.customData;
   if (['text', 'richtext', 'input'].includes(child.kind)) p.text = a.text ?? '';
   // 文字的自动大小：不写是 both（和 FairyGUI 一样），both、height 时尺寸由文字排版决定，headless 不算。
@@ -79,7 +100,10 @@ function props(child, model) {
 
 // 动效放一遍的时长：每一项的「开始帧 + 时长 × (重复次数 + 1)」取最大，按帧率（不写是每秒 24 帧）换成毫秒。
 // headless 后端按它走假时钟，放完才算完，和网页一致。有一项一直重复（repeat=-1）时永远放不完，记成 -1。
-function describeTransition(node) {
+// 动效每一项改哪一类属性（查代码补间有没有抢同一个属性用）；别的类型（Visible、Sound、Animation……）不碰补间的属性。
+const TOUCHES = {XY: 'xy', Size: 'size', Scale: 'scale', Alpha: 'alpha', Rotation: 'rotation', Color: 'color', Shake: 'shake', Text: 'text'};
+
+function describeTransition(node, names) {
   const a = node.attrs;
   const fps = Number(a.frameRate ?? 24) || 24;
   let frames = 0;
@@ -91,7 +115,10 @@ function describeTransition(node) {
   }
   return {
     name: a.name, ms: frames === Infinity ? -1 : Math.round((frames / fps) * 1000), autoPlay: a.autoPlay === 'true',
-    times: Number(a.autoPlayRepeat ?? a.autoPlayTimes ?? 1), delay: Math.round(Number(a.autoPlayDelay ?? 0) * 1000)
+    times: Number(a.autoPlayRepeat ?? a.autoPlayTimes ?? 1), delay: Math.round(Number(a.autoPlayDelay ?? 0) * 1000),
+    // target 是控件名，组件自己是 null；目标不在了的项 FairyGUI 跳过，这里也不记。
+    items: node.children.filter(child => child.tag === 'item' && TOUCHES[child.attrs.type] && (!child.attrs.target || names.has(child.attrs.target)))
+      .map(child => ({target: child.attrs.target ? names.get(child.attrs.target) : null, what: TOUCHES[child.attrs.type]}))
   };
 }
 
@@ -106,7 +133,7 @@ function layoutOf(node) {
 }
 
 // 改属性的齿轮：headless 不模拟，只记下有哪些、跟哪个控制器，读到它们管的属性时报不支持。
-const PROP_GEARS = ['gearText', 'gearColor', 'gearIcon', 'gearLook'];
+const PROP_GEARS = ['gearText', 'gearColor', 'gearIcon', 'gearLook', 'gearFontSize'];
 
 // 齿轮：gearDisplay、gearDisplay2 控制显示（页 ID 换成页名）；改属性的齿轮只记下来；改位置、尺寸的齿轮见 layoutOf；其他齿轮 headless 不模拟。
 function gears(node, component) {
@@ -126,7 +153,15 @@ function gears(node, component) {
   return Object.keys(result).length ? result : undefined;
 }
 
+// 按钮组件的按下效果：<Button downEffect="scale" downEffectValue="0.9"/>，downEffectValue 不写是 0.8（和 FairyGUI 一样）。
+function downEffectOf(component) {
+  const button = component.root.children.find(node => node.tag === 'Button')?.attrs ?? {};
+  if (button.downEffect !== 'scale' && button.downEffect !== 'dark') return undefined;
+  return {type: button.downEffect, value: button.downEffectValue !== undefined ? Number(button.downEffectValue) : 0.8};
+}
+
 export function describeComponent(component, model) {
+  const names = new Map(component.children.filter(child => child.id && child.name).map(child => [child.id, child.name]));
   return {
     name: component.fullName,
     id: component.id,
@@ -137,7 +172,10 @@ export function describeComponent(component, model) {
     ...(component.extension === 'Button' ? buttonSound(model, component.root.children.find(node => node.tag === 'Button')?.attrs) : {}),
     size: component.size.split(',').map(Number),
     controllers: component.controllers.map(c => ({name: c.name, pages: c.pages.map(page => page.name), selected: c.pages[c.selected]?.name ?? c.pages[0]?.name ?? null})),
-    transitions: component.root.children.filter(child => child.tag === 'transition').map(describeTransition),
+    ...(component.extension === 'Button' && downEffectOf(component) ? {downEffect: downEffectOf(component)} : {}),
+    // 组件自己的轴心（列表子项、界面根节点用它；实例上写的优先）。
+    ...(component.root.attrs.pivot ? {pivot: pair(component.root.attrs.pivot, [0, 0])} : {}),
+    transitions: component.root.children.filter(child => child.tag === 'transition').map(node => describeTransition(node, names)),
     // 组（group）：不进控件树，只记显示状态，组里的控件跟着它显隐。
     groups: component.children.filter(child => child.tag === 'group').map(group => ({
       id: group.id, name: group.name ?? '', visible: bool(group.attrs.visible, true), group: group.attrs.group ?? null, gears: gears(group, component),

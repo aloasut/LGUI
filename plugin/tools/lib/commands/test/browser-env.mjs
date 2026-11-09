@@ -135,14 +135,14 @@ function recorder(inner, logs, category, context) {
  * 装测试环境。createH5Backend、stage 来自工程里的框架（.lgui/framework/backends/h5）；sounds 是「ui://包ID资源ID → ui://包名/声音名」，
  * 记下的声音地址和 headless 一样统一成 ui://包名/声音名。
  */
-export function installBrowserEnv({createH5Backend, stage, config, deps, texts, defaultFont, sounds}) {
+export function installBrowserEnv({createH5Backend, stage, config, deps, texts, defaultFont, fonts, sounds}) {
   const snapshots = {};
   const createBackend = () => {
     const backend = createH5Backend();
     const state = {sounds: [], music: null, logs: []};
     const init = backend.init.bind(backend);
     backend.init = async options => {
-      await init({...options, defaultFont, uiBase: './ui', i18nBase: './i18n'});
+      await init({...options, defaultFont, fonts, uiBase: './ui', i18nBase: './i18n'});
       const platform = backend.platform;
       platform.log = recorder(platform.log, state.logs, 'game', {});
       const audio = platform.audio;

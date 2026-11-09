@@ -4,4 +4,6 @@
     <component id="mainvw01" name="MainView.xml" path="/" exported="true"/>
     <component id="mainvw02" name="MainView@portrait.xml" path="/" exported="true"/>
   </resources>
+  <publish name="Main">
+  </publish>
 </packageDescription>

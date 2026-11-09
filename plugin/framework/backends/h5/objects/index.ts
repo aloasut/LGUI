@@ -2,9 +2,10 @@
 import * as fgui from '../vendor/fairygui.module.js';
 import type {
   PointerInput, Rect, UIObject, UIComponent, UIText, UIInput, UIButton, UIImage, UILoader, UIList, UIController, UITransition, UIProgress, UIGraph, Unsubscribe,
-  UILabel, UISlider, UIComboBox, UIMovieClip, UITree, UITreeNode, WheelInput
+  UILabel, UISlider, UIComboBox, UIMovieClip, UITree, UITreeNode, WheelInput, TweenProp, TransitionTouch
 } from '../../../core/index';
 import {LgRuntimeError} from '../../../core/index';
+import {drivePress, scaleDownEffect} from '../fairygui-patches/button-press';
 import {pointerEventTypes, toPointerInput} from '../pointer';
 import {stage, toDesign} from '../scale';
 
@@ -14,6 +15,26 @@ const fromHex = (value: string): number => {
   if (!match) throw new LgRuntimeError('LGUI-RT-020', `颜色 ${value} 的格式不对。`, '写成 #rrggbb。');
   return parseInt(match[1].slice(-6), 16);
 };
+
+// 代码补间的属性归哪个齿轮管：FairyGUI 的 _gears 序号（1 XY、2 Size（也管 scale）、3 Look（透明度、旋转）、4 Color、9 FontSize）。
+const GEAR_OF: Partial<Record<TweenProp | 'text', [number, string]>> = {
+  text: [6, 'gearText'],
+  x: [1, 'gearXY'], y: [1, 'gearXY'], width: [2, 'gearSize'], height: [2, 'gearSize'], scaleX: [2, 'gearSize'], scaleY: [2, 'gearSize'],
+  alpha: [3, 'gearLook'], rotation: [3, 'gearLook'], color: [4, 'gearColor'], fontSize: [9, 'gearFontSize']
+};
+const BASE_PROPS: readonly TweenProp[] = ['x', 'y', 'width', 'height', 'scaleX', 'scaleY', 'rotation', 'alpha'];
+// FairyGUI 的 ObjectPropID。
+const PROP_COLOR = 2, PROP_FONT_SIZE = 8;
+// 动效项的 ActionType → 改哪一类属性。
+const TOUCHES: Record<number, TransitionTouch> = {0: 'xy', 1: 'size', 2: 'scale', 4: 'alpha', 5: 'rotation', 6: 'color', 11: 'shake', 14: 'text'};
+
+/** 这个控件有没有颜色、字号这两项（文字；按钮、标签要有标题文字；图片、加载器、序列帧、图形只有颜色）。 */
+function hasLook(native: fgui.GObject, prop: TweenProp): boolean {
+  if (native instanceof fgui.GTextField) return prop === 'color' || prop === 'fontSize';
+  if (native instanceof fgui.GButton || native instanceof fgui.GLabel) return (prop === 'color' || prop === 'fontSize') && native.getTextField() != null;
+  if (native instanceof fgui.GImage || native instanceof fgui.GLoader || native instanceof fgui.GMovieClip || native instanceof fgui.GGraph) return prop === 'color';
+  return false;
+}
 
 // 订阅 FairyGUI 事件，返回取消函数。
 function listen(target: fgui.EventDispatcher, type: string, handler: (event: fgui.FguiEvent) => void): Unsubscribe {
@@ -46,6 +67,61 @@ class H5Object implements UIObject {
   set touchable(value: boolean) { this.isTouchable = value; this.native.touchable = value && this.isEnabled; }
   get rect(): Rect { return {x: this.native.x, y: this.native.y, width: this.native.width, height: this.native.height}; }
   set rect(value: Rect) { this.native.setPosition(value.x, value.y); this.native.setSize(value.width, value.height); }
+  get parent(): UIObject | null { const p = this.native.parent; return p ? wrap(p) : null; }
+  get disposed(): boolean { return this.native.isDisposed; }
+  get pivot(): {x: number; y: number} { return {x: this.native.pivotX, y: this.native.pivotY}; }
+  supports(prop: TweenProp): boolean {
+    if (BASE_PROPS.includes(prop) || hasLook(this.native, prop)) return true;
+    if (prop === 'fillAmount') return (this.native instanceof fgui.GImage || this.native instanceof fgui.GLoader) && this.native.fillMethod !== 0;
+    return prop === 'progress' && this.native instanceof fgui.GProgressBar;
+  }
+  getProp(prop: TweenProp): number {
+    const n = this.native;
+    switch (prop) {
+      case 'x': return n.x;
+      case 'y': return n.y;
+      case 'width': return n.width;
+      case 'height': return n.height;
+      case 'scaleX': return n.scaleX;
+      case 'scaleY': return n.scaleY;
+      case 'rotation': return n.rotation;
+      case 'alpha': return n.alpha;
+      case 'color': return Number(n.getProp(PROP_COLOR)) || 0;
+      case 'fontSize': return Number(n.getProp(PROP_FONT_SIZE)) || 0;
+      case 'fillAmount': return (n as fgui.GImage).fillAmount;
+      case 'progress': { const bar = n as fgui.GProgressBar; return bar.max ? bar.value / bar.max * 100 : 0; }
+    }
+  }
+  // 只改这一项：位置、尺寸各改一维，缩放各改一个方向（FairyGUI 的 x、width 这些 setter 就是这样）。
+  setProp(prop: TweenProp, value: number): void {
+    const n = this.native;
+    switch (prop) {
+      case 'x': n.x = value; break;
+      case 'y': n.y = value; break;
+      case 'width': n.width = value; break;
+      case 'height': n.height = value; break;
+      case 'scaleX': n.scaleX = value; break;
+      case 'scaleY': n.scaleY = value; break;
+      case 'rotation': n.rotation = value; break;
+      case 'alpha': n.alpha = value; break;
+      case 'color': n.setProp(PROP_COLOR, value); break;
+      case 'fontSize': n.setProp(PROP_FONT_SIZE, value); break;
+      case 'fillAmount': (n as fgui.GImage).fillAmount = value; break;
+      case 'progress': { const bar = n as fgui.GProgressBar; bar.value = value / 100 * bar.max; break; }
+    }
+  }
+  // 按钮、标签的标题颜色、字号、文字就是标题文字控件的：它自己的齿轮也算。
+  ownerOf(prop: TweenProp | 'text'): string | null {
+    const gear = GEAR_OF[prop];
+    if (!gear) return null;
+    const n = this.native;
+    const title = (prop === 'color' || prop === 'fontSize' || prop === 'text') && (n instanceof fgui.GButton || n instanceof fgui.GLabel) ? n.getTextField() : null;
+    for (const o of title ? [n, title] : [n]) {
+      const found = o._gears[gear[0]];
+      if (found?.controller) return `齿轮 ${gear[1]}（控制器 ${found.controller.name}）`;
+    }
+    return null;
+  }
   onPointer(handler: (event: PointerInput) => void): Unsubscribe {
     const element = this.native.element;
     const listener = (event: PointerEvent): void => handler(toPointerInput(event));
@@ -143,6 +219,17 @@ class H5Button extends H5Component implements UIButton {
   get mode(): string { return buttonModes[this.native.mode] ?? `ButtonMode ${this.native.mode}`; }
   get sound(): string { return this.native.sound ?? ''; }
   get soundVolume(): number { return this.native.soundVolumeScale ?? 1; }
+  // downEffect="scale" 的上游效果已经由补丁 9 关掉（_downEffect 置 0），倍数记在补丁里；dark 还是上游的。
+  get downEffect(): UIButton['downEffect'] {
+    const scale = scaleDownEffect(this.native);
+    if (scale !== undefined) return {type: 'scale', value: scale};
+    const raw = this.native as unknown as {_downEffect: number; _downEffectValue: number};
+    return {type: raw._downEffect === 1 ? 'dark' : 'none', value: raw._downEffectValue ?? 0.8};
+  }
+  private press = 1;
+  get pressScale(): number { return this.press; }
+  // 只设元素的 CSS scale（补丁 9）：和 FairyGUI 写的 transform 叠加，按元素中心缩放，GObject 的位置、尺寸、scale 都不变。
+  set pressScale(value: number) { drivePress(this.native); this.press = value; this.native.element.style.scale = value === 1 ? '' : String(value); }
 }
 
 const fillMethods = ['none', 'horizontal', 'vertical', 'radial90', 'radial180', 'radial360'] as const;
@@ -364,6 +451,17 @@ class H5Transition implements UITransition {
   }
   stop(): void { this.native.stop(true, false); }
   setPaused(paused: boolean): void { this.native.setPaused(paused); }
+  // 和 FairyGUI 放动效时一样找每一项的目标：没写目标是组件自己。
+  touches(): readonly {target: UIObject; what: TransitionTouch}[] {
+    const owner = this.native._owner;
+    const found: {target: UIObject; what: TransitionTouch}[] = [];
+    for (const item of this.native._items) {
+      const what = TOUCHES[item.type];
+      const target = item.target ?? (item.targetId ? owner.getChildById(item.targetId) : owner);
+      if (what && target) found.push({target: wrap(target), what});
+    }
+    return found;
+  }
 }
 
 const cache = new WeakMap<object, UIObject>();

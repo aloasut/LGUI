@@ -50,8 +50,8 @@ const cases = {
   'LGUI-UI-017': {fail: r => { fs.copyFileSync(path.join(r, 'ui/assets/Common/placeholder.png'), path.join(r, 'ui/assets/Common/logo@fr.png')); edit(r, 'ui/assets/Common/package.xml', '</resources>', '  <image id="logo0001" name="logo@fr.png" path="/" exported="true"/>\n  </resources>'); }},
   'LGUI-UI-018': {fail: r => fs.copyFileSync(path.join(r, 'ui/assets/Common/placeholder.png'), path.join(r, 'ui/assets/Main/stray.png'))},
   'LGUI-UI-019': {fail: r => { edit(r, MAIN_PKG, 'name="MainView.xml" path="/" exported="true"', 'name="MainView.xml" path="/"'); edit(r, MAIN_PKG, 'name="MainView@portrait.xml" path="/" exported="true"', 'name="MainView@portrait.xml" path="/"'); }},
-  'LGUI-UI-020': {fail: r => edit(r, MAIN_XML, 'pkg="cmn00001" src="button01"', 'fileName="Button.xml" pkg="cmn00001" src="button01"'), warning: true},
-  'LGUI-UI-060': {fail: r => { edit(r, MAIN_XML, '<displayList>', '<controller name="state" pages="0,a,1,b" selected="0"/>\n  <displayList>'); edit(r, MAIN_XML, 'text="你好，LGUI">', 'text="你好，LGUI">\n      <gearText controller="state" pages="0,1" values="甲|乙" default="甲"/>'); }},
+  'LGUI-UI-020': {fail: r => edit(r, MAIN_XML, 'name="button" src="button01"', 'name="button" fileName="Button.xml" src="button01"'), warning: true},
+  'LGUI-UI-060': {fail: r => { edit(r, MAIN_XML, '<displayList>', '<controller name="state" pages="0,a,1,b" selected="0"/>\n  <displayList>'); edit(r, MAIN_XML, /(text="你好，LGUI"[^>]*>)/, '$1\n      <gearText controller="state" pages="0,1" values="甲|乙" default="甲"/>'); }},
   'LGUI-UI-061': {fail: r => { edit(r, MAIN_XML, '<displayList>', '<controller name="tabs" pages="0,a,1,b" selected="0"/>\n  <displayList>'); edit(r, MAIN_XML, '<Button title="点我"/>', '<Button title="点我" controller="tabs" page="1"/>'); }},
   'LGUI-UI-062': {fail: r => edit(r, 'i18n/en.json', '"Main/MainView/button": "Tap me"', '"Main/MainView/button": "点我"'), warning: true},
   'LGUI-UI-063': {fail: r => edit(r, 'ui/assets/Main/MainView@portrait.xml', 'text="你好，LGUI"', 'text="你好"'), warning: true},
@@ -319,7 +319,7 @@ test('跨包图片：<image pkg="…" src="…"> 引用别的包里导出的图�
   const root = await fresh();
   for (const file of [MAIN_XML, 'ui/assets/Main/MainView@portrait.xml']) edit(root, file, '</displayList>', '  <image id="n9" name="logo" pkg="cmn00001" src="placehd1" xy="20,20" size="64,64"/>\n  </displayList>');
   assert.deepEqual(await codes(root), []);
-  edit(root, 'ui/assets/Common/package.xml', '<image id="placehd1" name="placeholder.png" path="/" exported="true"/>', '<image id="placehd1" name="placeholder.png" path="/"/>');
+  edit(root, 'ui/assets/Common/package.xml', 'name="placeholder.png" path="/" exported="true"', 'name="placeholder.png" path="/"');
   const json = JSON.parse((await run(['check', '--json'], root)).stdout);
   assert.ok(json.data.findings.some(f => f.code === 'LGUI-UI-009' && /没导出的图片 Common\/placeholder/.test(f.message)), JSON.stringify(json.data.findings));
 });

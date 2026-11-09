@@ -11,6 +11,7 @@ import {esbuild} from '../plugin/tools/lib/vendor.mjs';
 import {generateProjectTypes, generateWeb, uiProjectPath} from '../plugin/tools/lib/generate/index.mjs';
 import {readUiModel} from '../plugin/tools/lib/generate/model.mjs';
 import {generateTranslations} from '../plugin/tools/lib/generate/i18n.mjs';
+import {generateFonts} from '../plugin/tools/lib/generate/fonts.mjs';
 import {bundleErrors, webBuildOptions, writeWebBootstrap} from '../plugin/tools/lib/dev/bundle.mjs';
 import {buildDir} from '../plugin/tools/lib/paths.mjs';
 
@@ -27,7 +28,9 @@ try {
   const project = readProject(root);
   await generateWeb(uiProjectPath(root), path.join(out, 'ui'));
   await generateProjectTypes(root, {validated: true});
-  generateTranslations(root, readUiModel(uiProjectPath(root)), project.languages, path.join(out, 'i18n'), project.defaultLanguage);
+  const model = readUiModel(uiProjectPath(root));
+  generateTranslations(root, model, project.languages, path.join(out, 'i18n'), project.defaultLanguage);
+  await generateFonts(root, project, model, path.join(out, 'ui', 'fonts'), 'woff2');
   const entry = writeWebBootstrap(root, project, {dir: buildDir(root, 'demo')}); // 启动入口不放进要发布的输出目录
   try {
     await esbuild().build({...webBuildOptions(root, entry, {dev: false, outfile: path.join(out, 'app.js')}), sourcemap: false});

@@ -1,0 +1,24 @@
+diff --git a/src/editor/dialogs/PublishSettingsEditor.ts b/src/editor/dialogs/PublishSettingsEditor.ts
+index c2c7b3b..55e811d 100644
+--- a/src/editor/dialogs/PublishSettingsEditor.ts
++++ b/src/editor/dialogs/PublishSettingsEditor.ts
+@@ -96,7 +96,8 @@ export function showPublishSettingsEditor(options: PublishSettingsEditorContext)
+     globalPanel.getChild("4x").asButton.selected = (highResolution & 4) !== 0;
+     setText(globalPanel, "jpegQuality", publish.jpegQuality ?? 80);
+     globalPanel.getChild("compressPNG").asComboBox.selectedIndex = publish.compressPNG === true ? 1 : 0;
+-    globalPanel.getChild("maxAtlasSize").asComboBox.value = String(atlas.maxSize ?? 2048);
++    // LGUI: no global maxSize means the generator's 4096 (2048 here would be written back on OK and shrink the atlas).
++    globalPanel.getChild("maxAtlasSize").asComboBox.value = String(atlas.maxSize ?? 4096);
+     globalPanel.getChild("paging").asButton.selected = atlas.paging !== false;
+     globalPanel.getChild("sizeOption").asComboBox.value = String(atlas.sizeOption ?? "pot");
+     globalPanel.getChild("square").asButton.selected = atlas.forceSquare === true;
+@@ -169,7 +170,8 @@ export function showPublishSettingsEditor(options: PublishSettingsEditorContext)
+         setText(packagePanel, "branchPath", current.branchPath);
+         packagePanel.getChild("twoPackages").asButton.selected = Number(current.packageCount ?? 1) === 2;
+         packagePanel.getChild("atlasOption").asButton.selected = current.useGlobalAtlasSettings !== false;
+-        packagePanel.getChild("maxAtlasSize").asComboBox.value = String(current.maxAtlasSize ?? 2048);
++        // LGUI: a package that uses the global settings shows the global limit (the backend fills its own maxAtlasSize with 2048).
++        packagePanel.getChild("maxAtlasSize").asComboBox.value = String(current.useGlobalAtlasSettings !== false ? atlas.maxSize ?? 4096 : current.maxAtlasSize ?? 4096);
+         packagePanel.getChild("sizeOption").asComboBox.value = String(current.sizeOption ?? "pot");
+         packagePanel.getChild("square").asButton.selected = current.forceSquare === true;
+         packagePanel.getChild("rotation").asButton.selected = current.allowRotation === true;

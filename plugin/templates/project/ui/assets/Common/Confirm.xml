@@ -2,9 +2,13 @@
 <component size="800,480">
   <displayList>
     <graph id="n0" name="bg" xy="0,0" size="800,480" type="rect" lineSize="2" lineColor="#6aa7ff" fillColor="#16202e"/>
-    <text id="n1" name="title" xy="40,32" size="720,56" fontSize="36" color="#ffffff" align="center" vAlign="middle" autoSize="shrink" singleLine="true" text="提示"/>
-    <text id="n2" name="message" xy="40,112" size="720,200" fontSize="28" color="#d8e2f0" align="center" vAlign="middle" autoSize="height" text=""/>
-    <component id="n3" name="cancel" src="button01" xy="120,360" size="240,72"><Button title="取消"/></component>
-    <component id="n4" name="ok" src="button01" xy="440,360" size="240,72"><Button title="确定"/></component>
+    <text id="n1" name="title" xy="40,32" size="720,56" text="提示" fontSize="36" color="#ffffff" align="center" vAlign="middle" autoSize="shrink" singleLine="true"/>
+    <text id="n2" name="message" xy="40,112" size="720,200" text="" fontSize="28" color="#d8e2f0" align="center" vAlign="middle" autoSize="height"/>
+    <component id="n3" name="cancel" src="button01" xy="120,360" size="240,72">
+      <Button title="取消"/>
+    </component>
+    <component id="n4" name="ok" src="button01" xy="440,360" size="240,72">
+      <Button title="确定"/>
+    </component>
   </displayList>
 </component>

@@ -98,7 +98,8 @@ test('图集上限：没写 maxAtlasSize 的包用 ui/settings/Publish.json 的 
   assert.deepEqual(small?.errors?.map(e => e.message), ['包 Main 的图片 bg.png（1080×2600）比图集上限 2048×2048（ui/settings/Publish.json 的 atlasSetting.maxSize）大，打不进图集。'], String(small?.stack ?? small));
   fs.rmSync(publish);
 
-  fs.writeFileSync(descriptor, original.replace('</resources>', '  <image id="bg000001" name="bg.png" path="/" exported="true"/>\n    <image id="strip001" name="strip.png" path="/" exported="true"/>\n  </resources>\n  <publish name="Main" maxAtlasSize="8192"/>'));
+  // 模板的 package.xml 已经有空的 <publish name="Main">（编辑器保存的格式），在它上面加 maxAtlasSize
+  fs.writeFileSync(descriptor, original.replace('</resources>', '  <image id="bg000001" name="bg.png" path="/" exported="true"/>\n    <image id="strip001" name="strip.png" path="/" exported="true"/>\n  </resources>').replace('<publish name="Main">', '<publish name="Main" maxAtlasSize="8192">'));
   await generateWeb(fairy, temp());
 
   const {atlasError} = await import('../../plugin/tools/lib/generate/atlas.mjs');

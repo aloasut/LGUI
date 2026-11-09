@@ -3,7 +3,9 @@
 // headless 只算规则、不算布局：读到布局算出来的位置和尺寸、改属性的齿轮管着的属性时报 LGUI-RT-260（要测就用 --browser）。
 import type {Backend, Insets, UIComponent, UIController, UIList, UIObject, UIText, UIButton, UILabel, UISlider, UIComboBox, UIMovieClip} from '../core/index';
 import {LgRuntimeError, notImplemented} from '../core/index';
-import type {AppDefinition, Snapshot, TestHarness} from './lgui';
+import type {AppDefinition, Look, Snapshot, TestHarness} from './lgui';
+import type {TweenProp} from '../core/index';
+import {engineState, originOf, tweened} from './tween/index';
 import type {InputType, ParamsOf, ViewClass} from './types';
 import type {RuntimeConfig} from './runtime';
 import type {TextTable} from './i18n';
@@ -32,6 +34,8 @@ interface TestEnv {
   deps: Record<string, string[]>;
   config: RuntimeConfig;
   texts: Record<string, TextTable>;
+  /** 项目字体的名字（ui/fonts/）；headless 只登记。 */
+  fonts?: string[];
   /** 每个测试结束后（afterEach）：记下当前快照（失败时 lgui test 附上它），再收尾（见 Harness.finish）。 */
   current: {snapshot(): Snapshot; finish(passed: boolean): string | null} | null;
 }
@@ -179,6 +183,35 @@ class Harness implements TestHarness {
     if (!('numItems' in o)) throw new LgRuntimeError('LGUI-RT-111', `${path} 不是列表或树。`, '换一个列表或树的路径。');
     return (o as UIList).numItems;
   }
+  /** 控件现在的样子（和 this.tween 同一个意思）。headless 不算布局：尺寸由布局决定、补间也没碰过时，读 width、height 报 LGUI-RT-260。 */
+  look(path: string): Look {
+    const o = this.object(path);
+    const has = (prop: TweenProp): number | undefined => o.supports(prop) ? o.getProp(prop) : undefined;
+    const press = 'pressScale' in o ? (o as UIButton).pressScale : 1;
+    const color = has('color');
+    const size = (prop: 'width' | 'height'): number => {
+      const unknown = (o as UnknownLayout).unknownLayout?.size;
+      if (unknown && !tweened(o, prop)) {
+        throw new LgRuntimeError('LGUI-RT-260', `headless 不算布局，读不了 ${path} 的${prop === 'width' ? '宽' : '高'}：它由${unknown}决定，ui/ 里写的初始值不是网页上的结果。`, '要测尺寸，用 lgui test --browser 在真浏览器里跑这个测试；只看缩放、透明度这些不受影响。');
+      }
+      return o.getProp(prop);
+    };
+    const look: Partial<Look> = {};
+    Object.defineProperties(look, {
+      dx: {enumerable: true, get: () => o.getProp('x') - originOf(o, 'x')},
+      dy: {enumerable: true, get: () => o.getProp('y') - originOf(o, 'y')},
+      scaleX: {enumerable: true, get: () => o.getProp('scaleX') * press},
+      scaleY: {enumerable: true, get: () => o.getProp('scaleY') * press},
+      rotation: {enumerable: true, get: () => o.getProp('rotation')},
+      alpha: {enumerable: true, get: () => o.getProp('alpha')},
+      width: {enumerable: true, get: () => size('width')},
+      height: {enumerable: true, get: () => size('height')},
+      color: {enumerable: true, get: () => color === undefined ? undefined : '#' + (Math.round(o.getProp('color')) & 0xffffff).toString(16).padStart(6, '0')},
+      fontSize: {enumerable: true, get: () => has('fontSize')},
+      fillAmount: {enumerable: true, get: () => has('fillAmount')}
+    });
+    return look as Look;
+  }
   /** 换屏幕尺寸，等防抖（150 毫秒）结束、换版完成后返回。 */
   setScreen(width: number, height: number): Promise<void> { return this.step(async () => { await this.sim.setScreen(this.backend, width, height); await this.sim.advance(this.backend, 200); }); }
   /** 换安全区（屏幕像素的边距），等重新摆放完成后返回。 */
@@ -201,8 +234,9 @@ class Harness implements TestHarness {
     this.closeEverything();
     this.checkLogs();
     const left = this.snapshot();
-    const leaked = left.views.length || left.packages.length;
-    if (leaked) throw new LgRuntimeError('LGUI-RT-112', `关闭所有界面后还有没清理的东西：${JSON.stringify({views: left.views, packages: left.packages})}。`, '检查是不是有界面没走 lgui.ui 关闭，或者在框架外面加了监听。');
+    const tweens = engineState();
+    const leaked = left.views.length || left.packages.length || tweens.tweens || tweens.subscribed;
+    if (leaked) throw new LgRuntimeError('LGUI-RT-112', `关闭所有界面后还有没清理的东西：${JSON.stringify({views: left.views, packages: left.packages, ...(tweens.tweens || tweens.subscribed ? {tweens} : {})})}。`, '检查是不是有界面没走 lgui.ui 关闭，或者在框架外面加了监听；补间没停说明框架漏了一种情况，请报给 LGUI。');
   }
   // 关闭时钩子里又打开的界面（比如 onClose 里弹 toast）也关掉：一直关到没有界面为止，最多 10 轮；
   // 再清掉界面缓存（配了 uiCache.keepClosedViews 时关掉的界面和它的包留在缓存里，不清就会被当成泄漏）。
@@ -251,7 +285,7 @@ class Harness implements TestHarness {
 export async function startTest(app: AppDefinition, options: {services?: Record<string, () => object>; language?: string; screen?: {width: number; height: number}} = {}): Promise<TestHarness> {
   const e = env();
   const backend = e.createBackend();
-  await backend.init({projectName: e.config.name, defaultFont: null, uiBase: ''});
+  await backend.init({projectName: e.config.name, defaultFont: null, fonts: e.fonts, uiBase: ''});
   if (options.screen) {
     // headless 直接设屏幕尺寸；浏览器里（lgui test --browser）在启动前把页面换成这个尺寸。
     if (backend.state?.screen) backend.state.screen = {...options.screen};

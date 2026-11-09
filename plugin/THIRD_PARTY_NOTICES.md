@@ -20,6 +20,8 @@ LGUI 的许可（[LICENSE](LICENSE)：PolyForm Shield 1.0.0 加 LumioGames 的�
 | libvips 及其依赖库（`@img/sharp-libvips-darwin-arm64`、`darwin-x64`、`linux-x64`；Windows 版打包在 `@img/sharp-win32-x64` 里） | `tools/vendor/node_modules/@img/sharp-libvips-*/`、`@img/sharp-win32-x64/` | sharp-libvips 1.2.4（libvips 8.17.3） | libvips 是 LGPL-3.0-or-later，许可全文见文末；上游源码 `https://github.com/libvips/libvips`，预编译包的构建脚本 `https://github.com/lovell/sharp-libvips`。其中各个依赖库的许可（LGPLv3、MIT、BSD、MPL-2.0、zlib、libpng 等）逐项列在各 `@img/sharp-libvips-*` 包的 `README.md` 里，各库版本见包内 `versions.json` |
 | zustand vanilla | `framework/mvc/vendor/zustand-vanilla.ts` | 5.0.16（`esm/vanilla.mjs` 照抄成 TS，逻辑不改） | MIT，Copyright (c) 2019 Paul Henschel；许可全文在文件开头 |
 | playwright-core | `tools/vendor/node_modules/playwright-core/` | 1.64.1 | Apache-2.0，Copyright (c) Microsoft Corporation；许可原文和 NOTICE 在包内。只连用户已有的 Chrome 或 Edge，不带浏览器 |
+| harfbuzzjs（含 HarfBuzz 编成的 `harfbuzz.wasm`、`harfbuzz-subset.wasm`） | `tools/vendor/node_modules/harfbuzzjs/` | 1.6.4 | harfbuzzjs 本身 MIT，Copyright (c) 2019-2026 The harfbuzzjs project authors，许可原文在包内 `LICENSE`。两个 WASM 里编进了 HarfBuzz 15.0.0（harfbuzzjs 1.6.4 运行时报告的版本），HarfBuzz 是 "Old MIT" 许可，要求所有副本都带版权声明；原文见文末「HarfBuzz」。用于给项目字体做子集（命令里只用 `harfbuzz-subset.wasm`；`harfbuzz.wasm` 只给测试读回字体） |
+| wawoff2（含 Google woff2 与 Brotli 编成的 WASM），以及它的依赖 argparse 2.0.1（Python-2.0，只给 wawoff2 自己的命令行用） | `tools/vendor/node_modules/wawoff2/`、`argparse/` | 2.0.1 | wawoff2 本身 MIT，许可原文在包内 `LICENSE`（版权行 “Copyright (c) 2013-2017 by the WOFF2 Authors.” 和 google/woff2 自己的 LICENSE 一字不差）。WASM 里编进了 google/woff2（提交 `a0d0ed7`）和它带的 Brotli（提交 `533843e`），都是 MIT，原文见文末「woff2」「Brotli」。argparse 的许可原文在包内 `LICENSE`。用于把项目字体的子集压成 WOFF2 |
 | [FairyGUI Editor Online](https://github.com/OpenFairyGUI/FairyGUI-Editor-Online/tree/45f0bef93bb16d507552b673ace6d5af417a8a0f) 编译版（LGUI 打了补丁、换了品牌，见仓库 `scripts/build-editor/`） | `editor/` | 提交 `45f0bef93bb16d507552b673ace6d5af417a8a0f` | 原创代码和文档 MIT，Copyright (c) 2026 FairyGUI Editor Online contributors；它自己的 `LICENSE`、`THIRD_PARTY_NOTICES.md`、`TRADEMARKS.md` 原样放在 `editor/` 里 |
 | 编辑器内嵌：LayaAir 网页运行时 | `editor/laya/` | 3.3.10 | MIT，Copyright (c) 2022 layabox |
 | 编辑器内嵌：FairyGUI for Layabox 运行时 | `editor/fairygui/` | 随上游提交 | MIT，Copyright (c) 2015 fairygui.com；保留其中 DOTween 条款链接、Robert Penner 的 BSD 声明和 zlib.js（imaya）的 MIT 声明 |
@@ -1216,3 +1218,134 @@ the library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
 ```
+
+## 字体子集工具编进 WASM 的库
+
+### HarfBuzz（harfbuzzjs 的 `harfbuzz.wasm`、`harfbuzz-subset.wasm`）
+
+来源 `https://github.com/harfbuzz/harfbuzz/blob/15.0.0/COPYING`（标签 15.0.0）。
+
+````text
+HarfBuzz is licensed under the so-called "Old MIT" license.  Details follow.
+For parts of HarfBuzz that are licensed under different licenses see individual
+files names COPYING in subdirectories where applicable.
+
+Copyright © 2010-2022  Google, Inc.
+Copyright © 2015-2020  Ebrahim Byagowi
+Copyright © 2019,2020  Facebook, Inc.
+Copyright © 2012,2015  Mozilla Foundation
+Copyright © 2011  Codethink Limited
+Copyright © 2008,2010  Nokia Corporation and/or its subsidiary(-ies)
+Copyright © 2009  Keith Stribley
+Copyright © 2011  Martin Hosken and SIL International
+Copyright © 2007  Chris Wilson
+Copyright © 2005,2006,2020,2021,2022,2023  Behdad Esfahbod
+Copyright © 2004,2007,2008,2009,2010,2013,2021,2022,2023  Red Hat, Inc.
+Copyright © 1998-2005  David Turner and Werner Lemberg
+Copyright © 2016  Igalia S.L.
+Copyright © 2022  Matthias Clasen
+Copyright © 2018,2021  Khaled Hosny
+Copyright © 2018,2019,2020  Adobe, Inc
+Copyright © 2013-2015  Alexei Podtelezhnikov
+
+For full copyright notices consult the individual files in the package.
+
+
+Permission is hereby granted, without written agreement and without
+license or royalty fees, to use, copy, modify, and distribute this
+software and its documentation for any purpose, provided that the
+above copyright notice and the following two paragraphs appear in
+all copies of this software.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE TO ANY PARTY FOR
+DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES
+ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN
+IF THE COPYRIGHT HOLDER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH
+DAMAGE.
+
+THE COPYRIGHT HOLDER SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
+BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS FOR A PARTICULAR PURPOSE.  THE SOFTWARE PROVIDED HEREUNDER IS
+ON AN "AS IS" BASIS, AND THE COPYRIGHT HOLDER HAS NO OBLIGATION TO
+PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+````
+
+### HarfBuzz：`src/ms-use/COPYING`（主许可里说「不同许可的部分见子目录的 COPYING」，源码树里只有这一份在 `src/` 下）
+
+来源 `https://github.com/harfbuzz/harfbuzz/blob/15.0.0/src/ms-use/COPYING`。
+
+````text
+    MIT License
+
+    Copyright (c) Microsoft Corporation.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE
+````
+
+### woff2（wawoff2 的 `build/*.js`）
+
+来源 `https://github.com/google/woff2/blob/a0d0ed7da27b708c0a4e96ad7a998bddc933c06e/LICENSE`（wawoff2 2.0.1 的 `src/Dockerfile` 固定的提交）。
+
+````text
+Copyright (c) 2013-2017 by the WOFF2 Authors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+````
+
+### Brotli（随 woff2 编进 wawoff2）
+
+来源 `https://github.com/google/brotli/blob/533843e3546cd24c8344eaa899c6b0b681c8d222/LICENSE`（woff2 提交 a0d0ed7 的 `brotli` 子模块指向的提交）。
+
+````text
+Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+````

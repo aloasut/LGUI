@@ -1,5 +1,6 @@
 // 加载随插件带的工具（plugin/tools/vendor/）。esbuild 和 sharp 会按当前平台自己挑对应的原生包。
 import {createRequire} from 'node:module';
+import {pathToFileURL} from 'node:url';
 import {LgCliError} from './errors.mjs';
 
 const require = createRequire(new URL('../vendor/package.json', import.meta.url));
@@ -35,3 +36,8 @@ export const sharp = () => load('sharp');
 export const playwright = () => load('playwright-core');
 // OpenFairyGUI：core 读写工程，functions/node 校验和生成界面包。
 export const openFairyGUI = () => ({core: load('@openfairygui/core'), coreNode: load('@openfairygui/core/node'), functions: load('@openfairygui/functions/node')});
+// 字体子集：harfbuzz-subset.wasm（随 harfbuzzjs 带）做子集；wawoff2 压 WOFF2。都是 WASM，不分平台。
+// harfbuzzjs 本身（ESM，带顶层 await，只能 import）只给测试和 scripts/ 读回字体用：它的对象靠垃圾回收释放，命令里不用。
+export const harfbuzz = () => import(pathToFileURL(require.resolve('harfbuzzjs')).href);
+export const harfbuzzSubsetWasm = () => require.resolve('harfbuzzjs/dist/harfbuzz-subset.wasm');
+export const woff2 = () => require('wawoff2/compress.js');

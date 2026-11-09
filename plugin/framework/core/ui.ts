@@ -33,6 +33,12 @@ export interface PointerInput {
   time: number;
 }
 
+/** 内部用：代码补间（mvc/tween）直接读写的属性。位置、尺寸是设计尺寸的像素；颜色是 0xrrggbb 的数字；progress 是进度条的 0–100。 */
+export type TweenProp = 'x' | 'y' | 'width' | 'height' | 'scaleX' | 'scaleY' | 'rotation' | 'alpha' | 'color' | 'fontSize' | 'fillAmount' | 'progress';
+
+/** 内部用：ui/ 动效的一项改控件的哪一类属性（XY、Size、Scale、Alpha、Rotation、Color、Shake、Text 项）。 */
+export type TransitionTouch = 'xy' | 'size' | 'scale' | 'alpha' | 'rotation' | 'color' | 'shake' | 'text';
+
 /** 所有 UI 对象的公共部分。 */
 export interface UIObject {
   /** 在 ui/ 里的控件名。 */
@@ -55,6 +61,20 @@ export interface UIObject {
   onWheel(handler: (event: WheelInput) => void): Unsubscribe;
   /** 内部用：是不是真的显示着：自己和各级父组件都显示，也没有被齿轮（gearDisplay）或组藏起来。 */
   readonly shown: boolean;
+  /** 内部用：所在的组件（列表子项的是列表），不在任何组件里是 null。 */
+  readonly parent: UIObject | null;
+  /** 内部用：已经销毁了。 */
+  readonly disposed: boolean;
+  /** 内部用：轴心（0–1，相对自己的宽高），ui/ 里没写是 (0, 0)。 */
+  readonly pivot: {x: number; y: number};
+  /** 内部用：这个控件有没有这个属性（代码补间用）。 */
+  supports(prop: TweenProp): boolean;
+  /** 内部用：读一个属性（代码补间用）。 */
+  getProp(prop: TweenProp): number;
+  /** 内部用：只改这一个属性（代码补间用）。 */
+  setProp(prop: TweenProp, value: number): void;
+  /** 内部用：这个属性（text 是文字，给 roll 查）还归谁管（改它的齿轮），返回说明文字（比如「齿轮 gearSize（控制器 c1）」）；没有是 null。按钮的按下效果、动效、绑定由框架另外查。 */
+  ownerOf(prop: TweenProp | 'text'): string | null;
 }
 
 /** 组件：可以按路径找子控件、控制器和动效。Name 是组件在 ui/ 里的「包/组件」名。 */
@@ -112,6 +132,10 @@ export interface UIButton extends UIComponent {
   readonly sound: string;
   /** ui/ 里设的点击音效音量（0–1，没设是 1；0 表示这个按钮不出声）。 */
   readonly soundVolume: number;
+  /** 内部用：ui/ 里按钮组件的按下效果（downEffect）和 downEffectValue。type 是 scale 时由框架接管（FairyGUI 原来的一下子缩小已经关掉），按下、松开的缩放写进 pressScale。 */
+  readonly downEffect: {type: 'none' | 'dark' | 'scale'; value: number};
+  /** 内部用：按下效果的缩放，1 是原样。只是视觉效果，不改位置、尺寸、scale，按按钮中心缩放。 */
+  pressScale: number;
 }
 
 /** 图片。fill 用于进度显示（比如长按进度、冷却）。 */
@@ -184,6 +208,8 @@ export interface UITransition {
   stop(): void;
   /** 暂停或恢复（界面被盖住时由框架调用）；没在播放时不起作用。 */
   setPaused(paused: boolean): void;
+  /** 内部用：每一项改哪个控件的哪一类属性（查代码补间和动效有没有抢同一个属性）。 */
+  touches(): readonly {target: UIObject; what: TransitionTouch}[];
 }
 
 /** 进度条。 */

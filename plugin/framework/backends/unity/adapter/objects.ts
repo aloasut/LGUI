@@ -1,6 +1,6 @@
 // FairyGUI-unity 对象 → 引擎无关接口。缓存包装对象，所有原生事件均有成对的 Add/Remove。
 import type {PointerInput, Rect, UIObject, UIComponent, UIText, UIInput, UIButton, UIImage, UILoader, UIList, UIController, UITransition, UIProgress, UIGraph, Unsubscribe,
-  UILabel, UISlider, UIComboBox, UIMovieClip, UITree, UITreeNode, WheelInput} from '../../../core/index';
+  UILabel, UISlider, UIComboBox, UIMovieClip, UITree, UITreeNode, WheelInput, TweenProp, TransitionTouch} from '../../../core/index';
 import {LgRuntimeError} from '../../../core/index';
 import type {NativeColor, NativeComponent, NativeController, NativeEventContext, NativeEventHandler, NativeEventListener, NativeFairyGUI, NativeGraph, NativeImage, NativeInputEvent, NativeList, NativeLoader, NativeObject, NativeProgress, NativeRect, NativeText, NativeTextInput, NativeButton, NativeTransition,
   NativeLabel, NativeSlider, NativeComboBox, NativeMovieClip, NativeTree, NativeTreeNode} from './native-ui';
@@ -10,6 +10,17 @@ const byte = (value: number): string => Math.round(Math.max(0, Math.min(1, value
 const rgb = (color: NativeColor): string => byte(color.r) + byte(color.g) + byte(color.b);
 const colorText = (color: NativeColor, alpha = false): string => '#' + (alpha && color.a < 1 ? byte(color.a) : '') + rgb(color);
 type Key = string | number;
+const colorNumber = (color: NativeColor): number => (Math.round(color.r * 255) << 16) | (Math.round(color.g * 255) << 8) | Math.round(color.b * 255);
+const numberText = (value: number): string => '#' + (Math.round(value) & 0xffffff).toString(16).padStart(6, '0');
+// 代码补间的属性归哪个齿轮管：FairyGUI 的 _gears 序号（1 XY、2 Size（也管 scale）、3 Look（透明度、旋转）、4 Color、9 FontSize）。
+const GEAR_OF: Partial<Record<TweenProp | 'text', [number, string]>> = {
+  text: [6, 'gearText'],
+  x: [1, 'gearXY'], y: [1, 'gearXY'], width: [2, 'gearSize'], height: [2, 'gearSize'], scaleX: [2, 'gearSize'], scaleY: [2, 'gearSize'],
+  alpha: [3, 'gearLook'], rotation: [3, 'gearLook'], color: [4, 'gearColor'], fontSize: [9, 'gearFontSize']
+};
+const BASE_PROPS: readonly TweenProp[] = ['x', 'y', 'width', 'height', 'scaleX', 'scaleY', 'rotation', 'alpha'];
+// 动效项的 TransitionActionType → 改哪一类属性。
+const TOUCHES: Record<number, TransitionTouch> = {0: 'xy', 1: 'size', 2: 'scale', 4: 'alpha', 5: 'rotation', 6: 'color', 11: 'shake', 14: 'text'};
 
 /** 对象层要用的宿主能力。FairyGUI 不公开按钮音效的地址和动效的自动播放设置，由 LGUI.Platform 读出来。 */
 export interface ObjectServices {
@@ -21,6 +32,14 @@ export interface ObjectServices {
   buttonSound(button: NativeButton): string;
   /** 动效在 ui/ 里写的设置（delay 是毫秒）。 */
   transitionSettings(transition: NativeTransition): UITransition['settings'];
+  /** 第 index 个齿轮跟的控制器名，没有这个齿轮是空字符串。 */
+  gearController(object: NativeObject, index: number): string;
+  /** 按钮的按下效果（0 没有、1 变暗、2 缩放）和 downEffectValue。 */
+  downEffect(button: NativeButton): {type: number; value: number};
+  /** 关掉 FairyGUI 自己的按下缩放（框架接管）。 */
+  disableDownEffect(button: NativeButton): void;
+  /** 动效的每一项：改的控件（没有是 null）和 TransitionActionType。 */
+  transitionItems(transition: NativeTransition): {target: NativeObject | null; type: number}[];
 }
 
 /** 为一个 Unity 后端创建独立的对象和事件缓存，不能混用另一个后端的对象。 */
@@ -81,6 +100,80 @@ export function createObjectAdapter(fgui: NativeFairyGUI, now: () => number, toP
     get customData(): string { return this.native.data == null ? '' : String(this.native.data); }
     get rect(): Rect { return {x: this.native.x, y: this.native.y, width: this.native.width, height: this.native.height}; }
     set rect(value: Rect) { this.native.SetXY(value.x, value.y); this.native.SetSize(value.width, value.height); }
+    get parent(): UIObject | null { const p = this.native.parent; return p ? wrap(p) : null; }
+    get disposed(): boolean { return this.native.isDisposed; }
+    get pivot(): {x: number; y: number} { return {x: this.native.pivotX, y: this.native.pivotY}; }
+    /** 颜色、字号写在哪（文字自己；按钮、标签的标题文字；图片、加载器、序列帧、图形只有颜色），没有是 null。 */
+    protected look(prop: TweenProp): {get(): number; set(value: number): void} | null {
+      const n = this.native;
+      if (n instanceof fgui.GTextField) {
+        const text = n as NativeText;
+        if (prop === 'color') return {get: () => colorNumber(text.color), set: v => { text.color = fromColor(numberText(v)); }};
+        if (prop === 'fontSize') return {get: () => text.textFormat.size, set: v => { const format = text.textFormat; format.size = v; text.textFormat = format; }};
+      }
+      if (n instanceof fgui.GButton || n instanceof fgui.GLabel) {
+        const titled = n as NativeButton | NativeLabel;
+        if (!titled.GetTextField()) return null;
+        if (prop === 'color') return {get: () => colorNumber(titled.titleColor), set: v => { titled.titleColor = fromColor(numberText(v)); }};
+        if (prop === 'fontSize') return {get: () => titled.titleFontSize, set: v => { titled.titleFontSize = v; }};
+      }
+      if (prop === 'color' && (n instanceof fgui.GImage || n instanceof fgui.GLoader || n instanceof fgui.GMovieClip || n instanceof fgui.GGraph)) {
+        const tinted = n as NativeImage | NativeLoader | NativeMovieClip | NativeGraph;
+        return {get: () => colorNumber(tinted.color), set: v => { tinted.color = fromColor(numberText(v)); }};
+      }
+      return null;
+    }
+    supports(prop: TweenProp): boolean {
+      const n = this.native;
+      if (BASE_PROPS.includes(prop) || this.look(prop)) return true;
+      if (prop === 'fillAmount') return (n instanceof fgui.GImage || n instanceof fgui.GLoader) && (n as NativeImage).fillMethod !== 0;
+      return prop === 'progress' && n instanceof fgui.GProgressBar;
+    }
+    getProp(prop: TweenProp): number {
+      const n = this.native;
+      switch (prop) {
+        case 'x': return n.x;
+        case 'y': return n.y;
+        case 'width': return n.width;
+        case 'height': return n.height;
+        case 'scaleX': return n.scaleX;
+        case 'scaleY': return n.scaleY;
+        case 'rotation': return n.rotation;
+        case 'alpha': return n.alpha;
+        case 'fillAmount': return (n as NativeImage).fillAmount;
+        case 'progress': { const bar = n as NativeProgress; return bar.max ? bar.value / bar.max * 100 : 0; }
+        default: return this.look(prop)?.get() ?? 0;
+      }
+    }
+    // 每写一次是一次 PuerTS 跨边界调用；只改这一项。
+    setProp(prop: TweenProp, value: number): void {
+      const n = this.native;
+      switch (prop) {
+        case 'x': n.x = value; break;
+        case 'y': n.y = value; break;
+        case 'width': n.width = value; break;
+        case 'height': n.height = value; break;
+        case 'scaleX': n.scaleX = value; break;
+        case 'scaleY': n.scaleY = value; break;
+        case 'rotation': n.rotation = value; break;
+        case 'alpha': n.alpha = value; break;
+        case 'fillAmount': (n as NativeImage).fillAmount = value; break;
+        case 'progress': { const bar = n as NativeProgress; bar.value = value / 100 * bar.max; break; }
+        default: this.look(prop)?.set(value);
+      }
+    }
+    // 按钮、标签的标题颜色、字号、文字就是标题文字控件的：它自己的齿轮也算。
+    ownerOf(prop: TweenProp | 'text'): string | null {
+      const gear = GEAR_OF[prop];
+      if (!gear) return null;
+      const n = this.native;
+      const title = (prop === 'color' || prop === 'fontSize' || prop === 'text') && (n instanceof fgui.GButton || n instanceof fgui.GLabel) ? (n as NativeButton | NativeLabel).GetTextField() : null;
+      for (const o of title ? [n, title] : [n]) {
+        const controller = services.gearController(o, gear[0]);
+        if (controller) return `齿轮 ${gear[1]}（控制器 ${controller}）`;
+      }
+      return null;
+    }
     track(off: Unsubscribe): Unsubscribe {
       let active = true;
       const release = (): void => { if (!active) return; active = false; this.subscriptions.delete(release); if (!this.subscriptions.size) activeObjects.delete(this); off(); };
@@ -197,6 +290,26 @@ export function createObjectAdapter(fgui: NativeFairyGUI, now: () => number, toP
     get mode(): string { return buttonModeName(this.native.mode); }
     get sound(): string { return services.buttonSound(this.native); }
     get soundVolume(): number { return this.native.soundVolumeScale; }
+    private effect: UIButton['downEffect'] | null = null;
+    // 第一次读时：downEffect="scale" 的关掉 FairyGUI 自己的一下子缩小（框架接管，带缓动），记下倍数；dark 还是 FairyGUI 的。
+    get downEffect(): UIButton['downEffect'] {
+      if (!this.effect) {
+        const raw = services.downEffect(this.native);
+        this.effect = {type: raw.type === 2 ? 'scale' : raw.type === 1 ? 'dark' : 'none', value: raw.value};
+        if (raw.type === 2) services.disableDownEffect(this.native);
+      }
+      return this.effect;
+    }
+    private press = 1;
+    private pressBase: [number, number] | null = null;
+    get pressScale(): number { return this.press; }
+    // FairyGUI-unity 的按下缩放本来就改 GObject 的 scale（轴心在按钮中间，上游设的）；这里一样，只是带缓动。
+    set pressScale(value: number) {
+      if (!this.pressBase) this.pressBase = [this.native.scaleX, this.native.scaleY];
+      this.press = value;
+      this.native.SetScale(this.pressBase[0] * value, this.pressBase[1] * value);
+      if (value === 1) this.pressBase = null;
+    }
   }
   class UnityImage extends UnityObject implements UIImage {
     constructor(readonly native: NativeImage) { super(native); }
@@ -413,6 +526,12 @@ export function createObjectAdapter(fgui: NativeFairyGUI, now: () => number, toP
     }
     stop(): void { this.native.Stop(true, false); }
     setPaused(paused: boolean): void { this.native.SetPaused(paused); }
+    touches(): readonly {target: UIObject; what: TransitionTouch}[] {
+      return services.transitionItems(this.native).flatMap(item => {
+        const what = TOUCHES[item.type];
+        return what && item.target ? [{target: wrap(item.target), what}] : [];
+      });
+    }
   }
 
   function releaseTree(native: NativeObject): void {

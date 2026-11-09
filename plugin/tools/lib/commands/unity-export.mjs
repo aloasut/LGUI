@@ -1,5 +1,6 @@
 // lgui unity export：先核对本地 Unity/PuerTS，再暂存构建，最后写入 Unity 的生成物目录。
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {LgCliError} from '../errors.mjs';
@@ -8,7 +9,9 @@ import {pluginVersion} from '../version.mjs';
 import {esbuild} from '../vendor.mjs';
 import {generateUnity, generateProjectTypes, uiProjectPath} from '../generate/index.mjs';
 import {generateTranslations} from '../generate/i18n.mjs';
+import {fontNames, generateFonts} from '../generate/fonts.mjs';
 import {runtimeConfig, readTexts, bundleErrors, webBuildOptions} from '../dev/bundle.mjs';
+import {readUnityPackage, writeUnityPackage} from '../unitypackage.mjs';
 
 const originalHash = '318425f7f5eb857b5fc1f664e77b68ff569a99a62641c02ae4819261b0f03aaf';
 const patchedHash = '3e3b479159fdd56c94ed08f4a7e756dbbfa36b9b4c714e99a40e5fc8f6ec9b83';
@@ -58,6 +61,46 @@ function assertOwnedPath(root, file, code = 'LGUI-CLI-052', kind = 'directory') 
   if (!inside(root, file) || !inside(fs.realpathSync(root), real)) {
     throw error(code, '导出路径通过目录链接逃出了工程，不会写入或删除它。', file, '移除生成物目录的链接，使用工程内的实际目录。');
   }
+}
+
+// TextMesh Pro 的必需资源（TMP Essential Resources）：项目字体在 Unity 上是 TMP 字体，TMP 建字体时要读工程里的 TMP Settings。
+// 工程里没有 TMP Settings 时，用 com.unity.ugui 自带的资源包补上（不联网），只写工程里还没有的文件。
+const tmpMenuFix = '在 Unity 里点 Window → TextMeshPro → Import TMP Essential Resources 导入一次，再运行 lgui unity export。';
+
+/** 工程 Assets/ 下有没有 TMP Settings.asset（不跟链接）。 */
+function hasTmpSettings(target) {
+  const walk = dir => fs.readdirSync(dir, {withFileTypes: true}).some(entry => entry.isDirectory() ? walk(path.join(dir, entry.name)) : entry.isFile() && entry.name === 'TMP Settings.asset');
+  const assets = path.join(target, 'Assets');
+  return fs.existsSync(assets) && walk(assets);
+}
+
+/** com.unity.ugui 自带资源包可能在的位置，按顺序：工程的包缓存、工程里的本地包、Unity Hub 默认安装位置里这个版本的内置包。 */
+export function essentialsCandidates(target, editorVersion, platform = process.platform, home = os.homedir()) {
+  const dirs = [];
+  const cache = path.join(target, 'Library', 'PackageCache');
+  if (fs.existsSync(cache)) for (const name of fs.readdirSync(cache).sort()) if (name === 'com.unity.ugui' || name.startsWith('com.unity.ugui@')) dirs.push(path.join(cache, name));
+  dirs.push(path.join(target, 'Packages', 'com.unity.ugui'));
+  const builtIn = ['Resources', 'PackageManager', 'BuiltInPackages', 'com.unity.ugui'];
+  if (editorVersion) {
+    if (platform === 'win32') dirs.push(path.win32.join('C:\\Program Files\\Unity\\Hub\\Editor', editorVersion, 'Editor', 'Data', ...builtIn));
+    else if (platform === 'darwin') dirs.push(path.posix.join('/Applications/Unity/Hub/Editor', editorVersion, 'Unity.app', 'Contents', ...builtIn));
+    else dirs.push(path.join(home, 'Unity', 'Hub', 'Editor', editorVersion, 'Editor', 'Data', ...builtIn));
+  }
+  const join = platform === 'win32' ? path.win32.join : path.posix.join;
+  return dirs.map(dir => join(dir, 'Package Resources', 'TMP Essential Resources.unitypackage'));
+}
+
+/** 要补就找到资源包并读出来（写盘在后面，所有检查都过了以后）；不用补返回 null。找不到、读不了报 LGUI-CLI-143。 */
+function prepareTmpEssentials(target, editorVersion, fonts) {
+  if (!fonts.length || hasTmpSettings(target)) return null;
+  const candidates = essentialsCandidates(target, editorVersion);
+  const file = candidates.find(candidate => fs.existsSync(candidate));
+  if (!file) throw error('LGUI-CLI-143', '工程用了项目字体（Unity 上是 TextMesh Pro 字体），但 Unity 工程里没有 TMP Settings，也没找到 com.unity.ugui 自带的 TMP Essential Resources 资源包。找过：\n' + candidates.map(c => '  ' + c).join('\n'), path.join(target, 'Assets'), '用 Unity ' + (editorVersion || '6000.6') + ' 打开一次这个工程（让它准备好包），再运行 lgui unity export；或者' + tmpMenuFix);
+  let items;
+  try { items = readUnityPackage(file); }
+  catch (cause) { throw error('LGUI-CLI-143', '读不了 TMP Essential Resources 资源包：' + cause.message, file, tmpMenuFix); }
+  if (!items.some(item => item.asset && path.posix.basename(item.pathname) === 'TMP Settings.asset')) throw error('LGUI-CLI-143', 'TMP Essential Resources 资源包里没有 TMP Settings.asset。', file, tmpMenuFix);
+  return {file, items};
 }
 
 function assertEmbeddedPackage(root, name) {
@@ -126,7 +169,7 @@ function writeBootstrap(root, stage, project, deps, texts) {
     'const globals = globalThis as unknown as {__lguiStart: () => Promise<void>; __lguiReady?: boolean; __lguiDispose?: () => void};\n' +
     'globals.__lguiStart = async () => {\n  try {\n' +
     '    const backend = createUnityBackend();\n' +
-    '    await backend.init({projectName: ' + JSON.stringify(project.name) + ', defaultFont: ' + JSON.stringify(project.defaultFont) + ', uiBase: "UI", i18nBase: "UI/i18n"});\n' +
+    '    await backend.init({projectName: ' + JSON.stringify(project.name) + ', defaultFont: ' + JSON.stringify(project.defaultFont) + ', fonts: ' + JSON.stringify(fontNames(root)) + ', uiBase: "UI", i18nBase: "UI/i18n"});\n' +
     '    await boot(backend, app, ' + JSON.stringify(runtimeConfig(project)) + ', ' + JSON.stringify(deps) + ', {texts: ' + JSON.stringify(texts) + '});\n' +
     '    globals.__lguiReady = true;\n' +
     '  } catch (error) {\n    const e = error as {code?: string; message?: string};\n' +
@@ -147,6 +190,7 @@ export async function unityExport({args, flags, cwd, projectRoot, project}) {
   if (!/^m_EditorVersion:[ \t]*6000\.6\.\d+[a-z0-9]*[ \t]*\r?$/m.test(version)) {
     throw error('LGUI-CLI-052', '目标工程必须使用 Unity 6000.6.x，当前 ' + version.trim() + '。', versionFile, '用 Unity 6000.6 创建或打开该工程后再导出。');
   }
+  const editorVersion = /^m_EditorVersion:[ \t]*(\S+)/m.exec(version)?.[1] ?? '';
   const core = assertEmbeddedPackage(target, 'com.tencent.puerts.core');
   assertEmbeddedPackage(target, 'com.tencent.puerts.v8');
   const patch = puertsPatch(core);
@@ -176,6 +220,9 @@ export async function unityExport({args, flags, cwd, projectRoot, project}) {
   catch (cause) { throw error('LGUI-CLI-011', 'Unity 包缺少 Boot metadata 或裁剪保留模板：' + cause.message, source, '重新安装完整的 LGUI 插件。'); }
   if (!guid) throw error('LGUI-CLI-011', 'Unity Boot metadata 缺少稳定的脚本 GUID。', meta, '重新安装完整的 LGUI 插件。');
 
+  // 项目字体要 TMP 的必需资源：缺了就先找到、读好资源包（写盘在后面）。
+  const tmp = prepareTmpEssentials(target, editorVersion, fontNames(projectRoot));
+
   // 所有已知前提通过，构建仍只发生在 LGUI 自己的缓存里。
   const stage = path.join(projectRoot, '.lgui/build/unity/export');
   assertOwnedPath(projectRoot, stage);
@@ -187,6 +234,7 @@ export async function unityExport({args, flags, cwd, projectRoot, project}) {
   await generateUnity(uiProjectPath(projectRoot), stageUi);
   const {model, deps} = await generateProjectTypes(projectRoot, {validated: true});
   generateTranslations(projectRoot, model, project.languages, path.join(stageUi, 'i18n'), project.defaultLanguage);
+  await generateFonts(projectRoot, project, model, path.join(stageUi, 'fonts'), 'sfnt'); // Unity 导入成动态字体，适配层按 UI/fonts/<名字> 注册
   fs.mkdirSync(stageGame, {recursive: true});
   const entry = writeBootstrap(projectRoot, stage, project, deps, texts);
   try {
@@ -195,6 +243,12 @@ export async function unityExport({args, flags, cwd, projectRoot, project}) {
   for (const directory of [stageUi, stageGame]) fs.writeFileSync(path.join(directory, 'README.txt'), generatedNotice);
 
   // 只替换两个明确归属 LGUI 的生成物目录；用户场景和其余 Assets 不覆盖。
+  let tmpResult = null;
+  if (tmp) {
+    try { tmpResult = writeUnityPackage(tmp.items, target, file => assertOwnedPath(target, file, 'LGUI-CLI-143', 'file')); }
+    catch (cause) { throw cause instanceof LgCliError ? cause : error('LGUI-CLI-143', '写入 TMP Essential Resources 失败：' + cause.message, path.join(target, 'Assets'), tmpMenuFix); }
+    if (!hasTmpSettings(target)) throw error('LGUI-CLI-143', '导入 TMP Essential Resources 以后工程里还是没有 TMP Settings.asset。', path.join(target, 'Assets'), tmpMenuFix);
+  }
   if (patch.bytes) fs.writeFileSync(patch.file, patch.bytes);
   if (!installed) fs.cpSync(source, packageDir, {recursive: true});
   for (const [from, to] of [[stageUi, ui], [stageGame, game]]) {
@@ -210,12 +264,14 @@ export async function unityExport({args, flags, cwd, projectRoot, project}) {
   raw.unityProject = path.relative(projectRoot, target).split(path.sep).join('/') || '.';
   fs.writeFileSync(configFile, JSON.stringify(raw, null, 2) + '\n');
   return {
-    data: {unityProject: target, package: packageDir, installed: !installed, patch: patch.status, scene, sceneCreated, ui, game: path.join(game, 'game.js.txt'), linker: link},
+    data: {unityProject: target, package: packageDir, installed: !installed, patch: patch.status, scene, sceneCreated, ui, game: path.join(game, 'game.js.txt'), linker: link,
+      tmpEssentials: tmpResult ? {imported: tmpResult.written, kept: tmpResult.kept, from: tmp.file} : null},
     summary: [
       (!installed ? '已安装' : '已核对') + ' Unity 包 ' + packageName + ' ' + pluginVersion() + '。',
       patch.bytes ? '已对本地 PuerTS 3.0.3 应用四处 Unity 6.6 兼容补丁。' : 'PuerTS 四处补丁已经应用，明确跳过，文件不变。',
       '已生成 Unity 界面包、翻译和游戏脚本：' + target,
       sceneCreated ? '已生成启动场景 Assets/LGUI/LGUIBoot.unity。' : '已有启动场景保持不变。',
+      ...(tmpResult ? ['已从 com.unity.ugui 自带的资源包导入 TMP Essential Resources（' + tmpResult.written + ' 个文件，没联网；工程里已有的 ' + tmpResult.kept + ' 个没动）：' + tmp.file] : []),
       '已复制 Assets/LGUI/link.xml 保留动态调用需要的程序集；在 Unity 打开启动场景并点 Play。'
     ]
   };

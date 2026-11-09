@@ -15,6 +15,7 @@ import {bundleErrors, frameworkEntry, readTexts, runtimeConfig} from '../dev/bun
 import {readUiModel} from '../generate/model.mjs';
 import {extractTexts, generateTranslations, translationMaps} from '../generate/i18n.mjs';
 import {uiProjectPath} from '../generate/index.mjs';
+import {fontNames, generateFonts} from '../generate/fonts.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const runtimeFile = name => path.join(here, 'test', name);
@@ -77,6 +78,7 @@ const env = {
   deps: ${JSON.stringify(deps)},
   config: ${JSON.stringify(runtimeConfig(project))},
   texts: ${JSON.stringify(texts)},
+  fonts: ${JSON.stringify(fontNames(root))},
   current: null as null | {snapshot(): unknown; finish(passed: boolean): string | null}
 };
 (globalThis as unknown as {__lguiTest: typeof env}).__lguiTest = env;
@@ -228,6 +230,7 @@ installBrowserEnv({
   deps: ${JSON.stringify(JSON.parse(fs.readFileSync(path.join(root, '.lgui', 'build', 'deps.json'), 'utf8')))},
   texts: ${JSON.stringify(readTexts(root, project.languages))},
   defaultFont: ${JSON.stringify(project.defaultFont ?? null)},
+  fonts: ${JSON.stringify(fontNames(root))},
   sounds: ${JSON.stringify(sounds)}
 });
 `);
@@ -298,7 +301,9 @@ export async function runBrowserTests(root, project, {files, name} = {}) {
   // 先生成界面包（顺带用 OpenFairyGUI 校验 ui/），再生成类型和 headless 描述（声音表要用）。
   await generateWeb(uiProjectPath(root), path.join(out, 'ui'));
   await generateProjectTypes(root, {validated: true});
-  generateTranslations(root, readUiModel(uiProjectPath(root)), project.languages, path.join(out, 'i18n'), project.defaultLanguage);
+  const model = readUiModel(uiProjectPath(root));
+  generateTranslations(root, model, project.languages, path.join(out, 'i18n'), project.defaultLanguage);
+  await generateFonts(root, project, model, path.join(out, 'ui', 'fonts'), 'woff2');
   const env = writeBrowserEnv(root, project, out);
   const bundles = [];
   for (const file of files) {

@@ -1,6 +1,6 @@
 // 图集上限。OpenFairyGUI 默认 2048，竖屏的整屏背景（比如 1080×2600）就放不下，生成时报一句看不懂的「atlas: Could not pack every input」。
 // 全局上限：ui/settings/Publish.json 里写了 atlasSetting.maxSize 就用它（编辑器「发布设置」里改的就是这个），没写才用 LGUI 的默认 ATLAS_MAX_SIZE；
-// 某个包要不一样，在它的 package.xml 里写 <publish name="包名" maxAtlasSize="…"/>。
+// 某个包要不一样，在它的 package.xml 的 <publish> 上写 maxAtlasSize="…"（模板和 lgui new 建的包已经有一个空的 <publish>，再加第二个不生效）。
 // 生成前逐张查图片尺寸，超过所在包的上限就报 LGUI-CLI-113，写明是哪张图、多大、怎么改；OpenFairyGUI 打图集失败也换成 LGUI-CLI-113。
 import path from 'node:path';
 import {LgCliError, LgCliErrors} from '../errors.mjs';
@@ -8,7 +8,7 @@ import {sharp} from '../vendor.mjs';
 
 export const ATLAS_MAX_SIZE = 4096;
 
-const fix = name => `把图缩到上限以内（全屏背景按设计尺寸出图；更长的可以拆成几张拼起来）；确实要这么大，就在 ui/assets/${name}/package.xml 的 </resources> 后面写 <publish name="${name}" maxAtlasSize="8192"/>（多数手机支持到 4096，再大先确认目标设备）。`;
+const fix = name => `把图缩到上限以内（全屏背景按设计尺寸出图；更长的可以拆成几张拼起来）；确实要这么大，就在 ui/assets/${name}/package.xml 已有的 <publish name="${name}"> 上加 maxAtlasSize="8192"，没有 <publish> 才在 </resources> 后面写 <publish name="${name}" maxAtlasSize="8192"/>（多数手机支持到 4096，再大先确认目标设备）。`;
 
 /** 定下全局上限（在调用处设，不改生成器）；再逐张查图片尺寸，用的上限和打图集时同一个。 */
 export async function prepareAtlas(document, assets) {

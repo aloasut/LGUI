@@ -70,14 +70,30 @@ export interface ViewEvent {
   view: ViewClass;
 }
 
+/** t.look 的结果。 */
+export interface Look {
+  dx: number;
+  dy: number;
+  scaleX: number;
+  scaleY: number;
+  rotation: number;
+  alpha: number;
+  width: number;
+  height: number;
+  /** #rrggbb。 */
+  color?: string;
+  fontSize?: number;
+  fillAmount?: number;
+}
+
 /** lgui.debug.snapshot() 的结果。 */
 export interface Snapshot {
   /** 每一层的界面栈（界面名，从下到上）。 */
   layers: Record<Layer, string[]>;
   /** 激活的界面。 */
   active: string | null;
-  /** 每个打开的界面的监听和定时器数量。 */
-  views: {name: string; listeners: number; timers: number}[];
+  /** 每个打开的界面的监听、定时器和正在跑的补间数量（补间含绑定的 roll 和按钮的按下效果）。 */
+  views: {name: string; listeners: number; timers: number; tweens: number}[];
   /** 已加载的界面包和引用数。 */
   packages: {name: string; refs: number}[];
   /** 当前方向。 */
@@ -128,6 +144,8 @@ export interface TestHarness {
   playing(path: string): boolean;
   /** 列表项数；树是显示着的节点数。 */
   items(path: string): number;
+  /** 控件现在的样子，每一项和 this.tween 里同一个意思（dx、dy 是相对 ui/ 里位置的偏移，其余是绝对值；缩放含按钮的按下效果），控件没有的那几项是 undefined。 */
+  look(path: string): Look;
   /** 模拟屏幕尺寸（旋转）。 */
   setScreen(width: number, height: number): Promise<void>;
   /** 模拟安全区（刘海、圆角），边距用屏幕像素。 */

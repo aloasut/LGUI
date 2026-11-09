@@ -6,8 +6,10 @@ import type {UIComponent, UIObject} from './ui';
 export interface BackendConfig {
   /** 工程名（存储键名的前缀）。 */
   projectName: string;
-  /** 默认字体，null 表示用 FairyGUI 的默认字体。 */
+  /** 默认字体：项目字体的名字（ui/fonts/<名字>.ttf），null 表示用系统默认字体。 */
   defaultFont: string | null;
+  /** 项目字体的名字（ui/fonts/ 里的文件名去掉扩展名）。启动时在创建任何界面之前加载好；不写就是没有项目字体。 */
+  fonts?: readonly string[];
   /** 界面包所在的地址或目录（h5 是生成目录里 ui/ 对应的网址：lgui dev 是 .lgui/build/dev/ui/，lgui verify 是 .lgui/build/verify/site/ui/；生成的启动入口传 ./ui）。 */
   uiBase: string;
   /** 翻译文件所在的地址（h5 是生成目录里 i18n/ 对应的网址，比如 .lgui/build/dev/i18n/；生成的启动入口传 ./i18n）。不写时只能用默认语言，换语言报 LGUI-RT-173。 */

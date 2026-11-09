@@ -7,17 +7,17 @@
     <graph id="n1" name="panel" xy="510,240" size="900,600" type="rect" lineSize="2" lineColor="#6aa7ff" fillColor="#16202e">
       <relation target="" sidePair="center-center,middle-middle"/>
     </graph>
-    <text id="n2" name="title" xy="550,272" size="820,56" fontSize="36" color="#ffffff" align="center" vAlign="middle" autoSize="shrink" singleLine="true" text="标题">
+    <text id="n2" name="title" xy="550,272" size="820,56" text="标题" fontSize="36" color="#ffffff" align="center" vAlign="middle" autoSize="shrink" singleLine="true">
       <relation target="" sidePair="center-center,middle-middle"/>
     </text>
-    <text id="n3" name="message" xy="550,352" size="820,340" fontSize="28" color="#d8e2f0" align="center" autoSize="shrink" text="内容">
+    <text id="n3" name="message" xy="550,352" size="820,340" text="内容" fontSize="28" color="#d8e2f0" align="center" autoSize="shrink">
       <relation target="" sidePair="center-center,middle-middle"/>
     </text>
-    <component id="n4" name="closeButton" pkg="{{COMMONID}}" src="{{BUTTONID}}" xy="700,728" size="240,72">
+    <component id="n4" name="closeButton" src="{{BUTTONID}}" xy="700,728" size="240,72" pkg="{{COMMONID}}">
       <relation target="" sidePair="center-center,middle-middle"/>
       <Button title="关闭"/>
     </component>
-    <component id="n5" name="okButton" pkg="{{COMMONID}}" src="{{BUTTONID}}" xy="980,728" size="240,72">
+    <component id="n5" name="okButton" src="{{BUTTONID}}" xy="980,728" size="240,72" pkg="{{COMMONID}}">
       <relation target="" sidePair="center-center,middle-middle"/>
       <Button title="确定"/>
     </component>

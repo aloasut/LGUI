@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component size="32,32">
   <displayList>
-    <graph id="n0" name="dot" xy="0,0" size="32,32" type="eclipse" lineSize="0" fillColor="#ff3b30"/>
-    <text id="n1" name="count" xy="0,0" size="32,32" fontSize="20" color="#ffffff" align="center" vAlign="middle" autoSize="shrink" singleLine="true" text=""/>
+    <graph id="n0" name="dot" xy="0,0" size="32,32" type="ellipse" lineSize="0" fillColor="#ff3b30"/>
+    <text id="n1" name="count" xy="0,0" size="32,32" text="" fontSize="20" color="#ffffff" align="center" vAlign="middle" autoSize="shrink" singleLine="true"/>
   </displayList>
 </component>

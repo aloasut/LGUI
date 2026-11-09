@@ -4,7 +4,7 @@
 // 改属性的齿轮（gearText、gearColor、gearIcon、gearLook）也不模拟，读到它们管的属性时报 LGUI-RT-260。
 import type {
   PointerInput, Rect, UIObject, UIComponent, UIText, UIInput, UIButton, UIImage, UILoader, UIList, UIController, UITransition, UIProgress, UIGraph, UIKind, Unsubscribe,
-  UILabel, UISlider, UIComboBox, UIMovieClip, UITree, UITreeNode, WheelInput
+  UILabel, UISlider, UIComboBox, UIMovieClip, UITree, UITreeNode, WheelInput, TweenProp, TransitionTouch
 } from '../../core/index';
 import {LgRuntimeError} from '../../core/index';
 import type {ChildDescriptor, ComponentDescriptor, GearsDescriptor, LayoutDescriptor, PropGear} from './descriptor';
@@ -44,11 +44,60 @@ export interface LayoutUnknown {
  * icon 是图标、加载器的地址（gearIcon），look 是可用、能不能点（gearLook，还管透明度和旋转）。
  * 代码写过这个属性以后就知道了（FairyGUI 把写的值记成当前页的），这个控制器再换页又不知道。
  */
-export type PropUnknown = Partial<Record<'text' | 'color' | 'icon' | 'look', string>>;
-const PROP_OF: Record<PropGear, keyof PropUnknown> = {gearText: 'text', gearColor: 'color', gearIcon: 'icon', gearLook: 'look'};
+export type PropUnknown = Partial<Record<'text' | 'color' | 'icon' | 'look' | 'fontSize', string>>;
+const PROP_OF: Record<PropGear, keyof PropUnknown> = {gearText: 'text', gearColor: 'color', gearIcon: 'icon', gearLook: 'look', gearFontSize: 'fontSize'};
+
+/** 颜色 #rrggbb ↔ 0xrrggbb（代码补间按数字插值）。 */
+const colorNumber = (value: string): number => parseInt(value.replace('#', '').slice(-6), 16) || 0;
+const colorText = (value: number): string => '#' + (Math.round(value) & 0xffffff).toString(16).padStart(6, '0');
 
 export class HeadlessObject implements UIObject {
   visible = true;
+  /** 内部用：已经销毁了（所在的组件销毁时一起打上）。 */
+  disposed = false;
+  /** 轴心（0–1）。 */
+  pivot = {x: 0, y: 0};
+  /** 缩放。 */
+  scaleX = 1;
+  scaleY = 1;
+  /** 旋转（度）。 */
+  rotation = 0;
+  /** 透明度。 */
+  alpha = 1;
+  /** 内部用：改位置、尺寸、透明度、颜色、字号的齿轮（代码补间碰它们管的属性报 LGUI-RT-282）。 */
+  gearOwners: Partial<Record<TweenProp | 'text', string>> = {};
+  /** 内部用：代码补间能读写哪些属性。 */
+  supports(prop: TweenProp): boolean { return ['x', 'y', 'width', 'height', 'scaleX', 'scaleY', 'rotation', 'alpha'].includes(prop); }
+  /** 内部用：读一个属性（位置、尺寸就是 rect；gearLook 管着的透明度、旋转报 LGUI-RT-260）。 */
+  getProp(prop: TweenProp): number {
+    switch (prop) {
+      case 'x': return this.box.x;
+      case 'y': return this.box.y;
+      case 'width': return this.box.width;
+      case 'height': return this.box.height;
+      case 'scaleX': return this.scaleX;
+      case 'scaleY': return this.scaleY;
+      case 'rotation': this.checkProp('look', '旋转'); return this.rotation;
+      case 'alpha': this.checkProp('look', '透明度'); return this.alpha;
+      default: throw new LgRuntimeError('LGUI-RT-280', `${this.path()} 没有属性 ${prop}。`, '换一个有这个属性的控件。');
+    }
+  }
+  /** 内部用：只改这一个属性。位置、尺寸直接改 rect（不当作「框架摆过」：关联、齿轮决定的位置照样不知道）。 */
+  setProp(prop: TweenProp, value: number): void {
+    switch (prop) {
+      case 'x': this.box.x = value; break;
+      case 'y': this.box.y = value; break;
+      case 'width': this.box.width = value; break;
+      case 'height': this.box.height = value; break;
+      case 'scaleX': this.scaleX = value; break;
+      case 'scaleY': this.scaleY = value; break;
+      case 'rotation': this.rotation = value; break;
+      case 'alpha': this.alpha = value; break;
+      default: throw new LgRuntimeError('LGUI-RT-280', `${this.path()} 没有属性 ${prop}。`, '换一个有这个属性的控件。');
+    }
+  }
+  /** 内部用：这个属性归哪个齿轮管。 */
+  ownerOf(prop: TweenProp | 'text'): string | null { return this.gearOwners[prop] ?? null; }
   private isEnabled = true;
   private isTouchable = true;
   /** 内部用：改属性的齿轮管着、headless 不知道的属性（见 PropUnknown）。 */
@@ -121,7 +170,6 @@ export class HeadlessComponent extends HeadlessObject implements UIComponent {
   readonly children: HeadlessObject[] = [];
   readonly controllers = new Map<string, HeadlessController>();
   readonly transitions = new Map<string, HeadlessTransition>();
-  disposed = false;
   constructor(name: string, readonly componentName: string, kind: UIKind | 'container' = 'component') { super(name, kind); }
   child(path: string): UIObject | null {
     let current: HeadlessObject | null = this;
@@ -152,7 +200,7 @@ export class HeadlessComponent extends HeadlessObject implements UIComponent {
     this.disposed = true;
     for (const t of this.transitions.values()) t.stop();
     this.parent?.removeChild(this);
-    for (const c of [...this.children]) if (c instanceof HeadlessComponent) c.dispose();
+    for (const c of [...this.children]) { if (c instanceof HeadlessComponent) c.dispose(); else c.disposed = true; }
     this.children.length = 0;
   }
 }
@@ -160,10 +208,23 @@ export class HeadlessComponent extends HeadlessObject implements UIComponent {
 class HeadlessText extends HeadlessObject implements UIText {
   private value = '';
   private tint = '#ffffff';
+  private size = 12;
   get text(): string { this.checkProp('text', '文字'); return this.value; }
   set text(value: string) { this.value = value; this.knownProp('text'); }
   get color(): string { this.checkProp('color', '颜色'); return this.tint; }
   set color(value: string) { this.tint = value; this.knownProp('color'); }
+  /** 字号（像素）。 */
+  get fontSize(): number { this.checkProp('fontSize', '字号'); return this.size; }
+  set fontSize(value: number) { this.size = value; this.knownProp('fontSize'); }
+  supports(prop: TweenProp): boolean { return prop === 'color' || prop === 'fontSize' || super.supports(prop); }
+  getProp(prop: TweenProp): number { return prop === 'color' ? colorNumber(this.color) : prop === 'fontSize' ? this.fontSize : super.getProp(prop); }
+  setProp(prop: TweenProp, value: number): void { if (prop === 'color') this.color = colorText(value); else if (prop === 'fontSize') this.fontSize = value; else super.setProp(prop, value); }
+}
+
+// 按钮、标签的标题颜色、字号：和 FairyGUI 一样就是 title 子控件（文字）的颜色、字号；没有这个子控件就没有这两项。
+function titleSupports(component: HeadlessComponent, prop: TweenProp): boolean {
+  const t = titleChild(component);
+  return (prop === 'color' || prop === 'fontSize') && t instanceof HeadlessText;
 }
 
 class HeadlessInput extends HeadlessText implements UIInput {
@@ -190,6 +251,10 @@ function setDisplayText(o: HeadlessObject, value: string): void {
 // 标签自己的 gearText 改的也是 title 子控件的文字；title 子控件自己有 gearText 时，读它的文字报不支持。
 class HeadlessLabel extends HeadlessComponent implements UILabel {
   private image = '';
+  supports(prop: TweenProp): boolean { return titleSupports(this, prop) || super.supports(prop); }
+  getProp(prop: TweenProp): number { return titleSupports(this, prop) ? (titleChild(this) as HeadlessText).getProp(prop) : super.getProp(prop); }
+  setProp(prop: TweenProp, value: number): void { if (titleSupports(this, prop)) (titleChild(this) as HeadlessText).setProp(prop, value); else super.setProp(prop, value); }
+  ownerOf(prop: TweenProp | 'text'): string | null { return super.ownerOf(prop) ?? (prop === 'text' || titleSupports(this, prop) ? (titleChild(this) as HeadlessObject | null)?.ownerOf(prop) ?? null : null); }
   get icon(): string { this.checkProp('icon', '图标'); return this.image; }
   set icon(value: string) { this.image = value; this.knownProp('icon'); }
   get title(): string { this.checkProp('text', '文字'); const t = titleChild(this); return t ? displayText(t) : ''; }
@@ -236,6 +301,11 @@ export class HeadlessComboBox extends HeadlessComponent implements UIComboBox {
 class HeadlessMovieClip extends HeadlessObject implements UIMovieClip {
   playing = true;
   frame = 0;
+  /** 着色（白色是原色）。 */
+  tint = '#ffffff';
+  supports(prop: TweenProp): boolean { return prop === 'color' || super.supports(prop); }
+  getProp(prop: TweenProp): number { return prop === 'color' ? colorNumber(this.tint) : super.getProp(prop); }
+  setProp(prop: TweenProp, value: number): void { if (prop === 'color') this.tint = colorText(value); else super.setProp(prop, value); }
 }
 
 // 按钮：和 FairyGUI 一样，title 自己记一份，同时写进 title 子控件（没有这个子控件就不显示）；一开始是 title 子控件自己的文字。
@@ -245,6 +315,14 @@ class HeadlessButton extends HeadlessComponent implements UIButton {
   sound = '';
   soundVolume = 1;
   mode = 'Common';
+  /** ui/ 里按钮组件的按下效果。 */
+  downEffect: UIButton['downEffect'] = {type: 'none', value: 0.8};
+  /** 按下效果的缩放（框架接管 downEffect="scale" 后写）；t.look 读到的缩放乘上它。 */
+  pressScale = 1;
+  supports(prop: TweenProp): boolean { return titleSupports(this, prop) || super.supports(prop); }
+  getProp(prop: TweenProp): number { return titleSupports(this, prop) ? (titleChild(this) as HeadlessText).getProp(prop) : super.getProp(prop); }
+  setProp(prop: TweenProp, value: number): void { if (titleSupports(this, prop)) (titleChild(this) as HeadlessText).setProp(prop, value); else super.setProp(prop, value); }
+  ownerOf(prop: TweenProp | 'text'): string | null { return super.ownerOf(prop) ?? (prop === 'text' || titleSupports(this, prop) ? (titleChild(this) as HeadlessObject | null)?.ownerOf(prop) ?? null : null); }
   get icon(): string { this.checkProp('icon', '图标'); return this.image; }
   set icon(value: string) { this.image = value; this.knownProp('icon'); }
   get title(): string { this.checkProp('text', '文字'); return this.label; }
@@ -272,15 +350,30 @@ class HeadlessButton extends HeadlessComponent implements UIButton {
   }
 }
 
+// 图片、加载器共用：着色（白色是原色）和填充（ui/ 里设了填充方式才能补 fillAmount）。
+function tintSupports(o: {fillMethod: UIImage['fillMethod']}, prop: TweenProp): boolean {
+  return prop === 'color' || (prop === 'fillAmount' && o.fillMethod !== 'none');
+}
+
 class HeadlessImage extends HeadlessObject implements UIImage {
   fillMethod: UIImage['fillMethod'] = 'none';
   fillOrigin = 0;
   fillClockwise = true;
   fillAmount = 1;
+  tint = '#ffffff';
+  supports(prop: TweenProp): boolean { return tintSupports(this, prop) || super.supports(prop); }
+  getProp(prop: TweenProp): number { return prop === 'color' ? colorNumber(this.tint) : prop === 'fillAmount' ? this.fillAmount : super.getProp(prop); }
+  setProp(prop: TweenProp, value: number): void { if (prop === 'color') this.tint = colorText(value); else if (prop === 'fillAmount') this.fillAmount = value; else super.setProp(prop, value); }
 }
 
 class HeadlessLoader extends HeadlessObject implements UILoader {
   private current = '';
+  fillMethod: UIImage['fillMethod'] = 'none';
+  fillAmount = 1;
+  tint = '#ffffff';
+  supports(prop: TweenProp): boolean { return tintSupports(this, prop) || super.supports(prop); }
+  getProp(prop: TweenProp): number { return prop === 'color' ? colorNumber(this.tint) : prop === 'fillAmount' ? this.fillAmount : super.getProp(prop); }
+  setProp(prop: TweenProp, value: number): void { if (prop === 'color') this.tint = colorText(value); else if (prop === 'fillAmount') this.fillAmount = value; else super.setProp(prop, value); }
   readonly loads = new Handlers<void>();
   readonly errors = new Handlers<string>();
   /** 测试里设为 true 时，网络图片一律加载失败。 */
@@ -437,12 +530,18 @@ export class HeadlessTree extends HeadlessComponent implements UITree {
 class HeadlessProgress extends HeadlessComponent implements UIProgress {
   value = 0;
   max = 100;
+  supports(prop: TweenProp): boolean { return prop === 'progress' || super.supports(prop); }
+  getProp(prop: TweenProp): number { return prop === 'progress' ? (this.max ? this.value / this.max * 100 : 0) : super.getProp(prop); }
+  setProp(prop: TweenProp, value: number): void { if (prop === 'progress') this.value = value / 100 * this.max; else super.setProp(prop, value); }
 }
 
 class HeadlessGraph extends HeadlessObject implements UIGraph {
   private tint = '#ffffff';
   get color(): string { this.checkProp('color', '颜色'); return this.tint; }
   set color(value: string) { this.tint = value; this.knownProp('color'); }
+  supports(prop: TweenProp): boolean { return prop === 'color' || super.supports(prop); }
+  getProp(prop: TweenProp): number { return prop === 'color' ? colorNumber(this.color) : super.getProp(prop); }
+  setProp(prop: TweenProp, value: number): void { if (prop === 'color') this.color = colorText(value); else super.setProp(prop, value); }
 }
 
 export class HeadlessController implements UIController {
@@ -468,7 +567,15 @@ export class HeadlessTransition implements UITransition {
   /** 播放过几次（测试断言用）。 */
   plays = 0;
   private stopFrames: Unsubscribe | null = null;
+  /** 内部用：动效所在的组件和每一项（控件名，组件自己是 null）。 */
+  owner: HeadlessComponent | null = null;
+  items: readonly {target: string | null; what: TransitionTouch}[] = [];
   constructor(readonly name: string, private readonly ms: number, readonly settings: UITransition['settings']) {}
+  touches(): readonly {target: UIObject; what: TransitionTouch}[] {
+    const owner = this.owner;
+    if (!owner) return [];
+    return this.items.flatMap(item => { const target = item.target === null ? owner : owner.child(item.target); return target ? [{target, what: item.what}] : []; });
+  }
   play(options: {times?: number; delay?: number} = {}, onComplete?: () => void): void {
     this.halt();
     this.plays++;
@@ -535,6 +642,13 @@ function buildChild(child: ChildDescriptor, lookup: Lookup, owner: string | unde
     }
   }
   object.visible = p.visible;
+  if (p.pivot) object.pivot = {x: p.pivot[0], y: p.pivot[1]};
+  if (p.scale) [object.scaleX, object.scaleY] = p.scale;
+  if (p.rotation !== undefined) object.rotation = p.rotation;
+  if (p.alpha !== undefined) object.alpha = p.alpha;
+  if (object instanceof HeadlessText) { if (p.color) object.color = p.color; if (p.fontSize !== undefined) object.fontSize = p.fontSize; }
+  if ((object instanceof HeadlessImage || object instanceof HeadlessLoader || object instanceof HeadlessMovieClip) && p.color) object.tint = p.color;
+  if ((object instanceof HeadlessImage || object instanceof HeadlessLoader) && p.fillMethod) { object.fillMethod = p.fillMethod; object.fillAmount = p.fillAmount ?? 1; }
   object.customData = p.customData ?? '';
   object.enabled = p.enabled;
   object.touchable = p.touchable;
@@ -559,6 +673,9 @@ function markLayout(object: HeadlessObject, layout: LayoutDescriptor | undefined
   }
   if (layout?.gearXY && !unknown.position) unknown.position = '改位置的齿轮（gearXY）';
   if (layout?.gearSize && !unknown.size) unknown.size = '改尺寸的齿轮（gearSize）';
+  if (layout?.gearXY) object.gearOwners.x = object.gearOwners.y = '齿轮 gearXY';
+  // gearSize 也管缩放（FairyGUI 的 GearSize 记的是宽、高和 scaleX、scaleY）。
+  if (layout?.gearSize) object.gearOwners.width = object.gearOwners.height = object.gearOwners.scaleX = object.gearOwners.scaleY = '齿轮 gearSize';
   if (object.kind === 'loader') { if (autoSize === 'true' && !unknown.size) unknown.size = '加载器的自动大小（autoSize="true"，尺寸跟着图片）'; }
   else if ((autoSize === 'both' || autoSize === 'height') && !unknown.size) unknown.size = `文字的自动大小（autoSize="${autoSize}"）`;
 }
@@ -568,6 +685,9 @@ function markPropGears(object: HeadlessObject, gears: GearsDescriptor | undefine
   for (const g of gears?.props ?? []) {
     const controller = component.controllers.get(g.controller);
     if (!controller) continue;
+    const owner = `齿轮 ${g.gear}（控制器 ${g.controller}）`;
+    const props: (TweenProp | 'text')[] = g.gear === 'gearText' ? ['text'] : g.gear === 'gearLook' ? ['alpha', 'rotation'] : g.gear === 'gearColor' ? ['color'] : g.gear === 'gearFontSize' ? ['fontSize'] : [];
+    for (const prop of props) object.gearOwners[prop] = owner;
     const mark = (): void => { object.unknownProps[PROP_OF[g.gear]] = `改属性的齿轮 ${g.gear}（控制器 ${g.controller}）`; };
     mark();
     controller.changes.add(mark);
@@ -599,6 +719,7 @@ export function buildComponent(descriptor: ComponentDescriptor, lookup: Lookup, 
     const button = new HeadlessButton(name, descriptor.name, 'button');
     button.icon = props?.icon ?? '';
     button.mode = descriptor.buttonMode ?? 'Common';
+    if (descriptor.downEffect) button.downEffect = {...descriptor.downEffect};
     // 和 FairyGUI 一样：实例上写的音效、音量各自优先，其次是按钮组件的。
     button.sound = props?.sound ?? descriptor.sound ?? '';
     button.soundVolume = props?.soundVolume ?? descriptor.soundVolume ?? 1;
@@ -625,10 +746,13 @@ export function buildComponent(descriptor: ComponentDescriptor, lookup: Lookup, 
     component = new HeadlessComponent(name, descriptor.name);
   }
   component.rect = {x: 0, y: 0, width: descriptor.size[0], height: descriptor.size[1]};
+  if (descriptor.pivot) component.pivot = {x: descriptor.pivot[0], y: descriptor.pivot[1]};
   for (const c of descriptor.controllers) component.controllers.set(c.name, new HeadlessController(c.name, c.pages, c.selected));
   if (component instanceof HeadlessButton && props?.selected) component.selected = true;
   for (const t of descriptor.transitions) {
     const transition = new HeadlessTransition(t.name, t.ms, {autoPlay: t.autoPlay, times: t.times, delay: t.delay});
+    transition.owner = component;
+    transition.items = t.items ?? [];
     component.transitions.set(t.name, transition);
     // 自动播放：网页上组件放进界面时开始放，这里在创建时开始（UIManager 创建完马上就放进界面）。
     if (t.autoPlay) transition.play({times: t.times, delay: t.delay});

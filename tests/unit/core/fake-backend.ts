@@ -26,6 +26,13 @@ class FakeObject implements UIObject {
   onPointer(handler: (event: PointerInput) => void): Unsubscribe { return this.pointer.on(handler); }
   hitDepth(): number { return -1; }
   onWheel(handler: (event: WheelInput) => void): Unsubscribe { return this.wheels.on(handler); }
+  parent: UIObject | null = null;
+  disposed = false;
+  pivot = {x: 0, y: 0};
+  supports(): boolean { return false; }
+  getProp(): number { return 0; }
+  setProp(): void {}
+  ownerOf(): string | null { return null; }
 }
 
 export class FakeController implements UIController<'a' | 'b'> {

@@ -36,6 +36,9 @@ export interface NativePackageItem {
 export interface NativeObject {
   name: string; visible: boolean; enabled: boolean; grayed: boolean; touchable: boolean;
   x: number; y: number; width: number; height: number;
+  scaleX: number; scaleY: number; rotation: number; alpha: number;
+  readonly pivotX: number; readonly pivotY: number;
+  readonly isDisposed: boolean;
   data: unknown;
   readonly parent: NativeComponent | null;
   readonly packageItem: NativePackageItem | null;
@@ -47,6 +50,7 @@ export interface NativeObject {
   readonly displayObject: NativeDisplayObject | null;
   SetXY(x: number, y: number): void;
   SetSize(width: number, height: number): void;
+  SetScale(scaleX: number, scaleY: number): void;
   Dispose(): void;
 }
 export interface NativeComponent extends NativeObject {
@@ -60,25 +64,28 @@ export interface NativeComponent extends NativeObject {
   AddChild(child: NativeObject): NativeObject;
   RemoveChild(child: NativeObject): NativeObject;
 }
-export interface NativeText extends NativeObject {text: string; color: NativeColor}
+/** FairyGUI 的 TextFormat：改了要整个写回 textFormat 才生效。 */
+export interface NativeTextFormat {size: number}
+export interface NativeText extends NativeObject {text: string; color: NativeColor; textFormat: NativeTextFormat}
 export interface NativeTextInput extends NativeText {promptText: string; readonly onChanged: NativeEventListener}
 /** sound 是 NAudioClip（地址由 LGUI.Platform.ButtonSoundUrl 反查）。 */
 /** mode 是 FairyGUI.ButtonMode：PuerTS 一般给数字（0 Common、1 Check、2 Radio），也可能是枚举名或带 ToString 的枚举对象。 */
-export interface NativeButton extends NativeComponent {title: string; icon: string; selected: boolean; readonly mode: unknown; sound: unknown | null; soundVolumeScale: number}
-export interface NativeLabel extends NativeComponent {title: string | null; icon: string | null}
+export interface NativeButton extends NativeComponent {title: string; icon: string; selected: boolean; readonly mode: unknown; sound: unknown | null; soundVolumeScale: number; titleColor: NativeColor; titleFontSize: number; GetTextField(): NativeText | null}
+export interface NativeLabel extends NativeComponent {title: string | null; icon: string | null; titleColor: NativeColor; titleFontSize: number; GetTextField(): NativeText | null}
 export interface NativeSlider extends NativeComponent {value: number; min: number; max: number; readonly onChanged: NativeEventListener}
 /** items 是 C# 的 string[]（PuerTS 不和 JS 数组互转），所以读写都走 itemList，改完调用 ApplyListChange。 */
 export interface NativeComboBox extends NativeComponent {
   readonly itemList: NativeCsMutableList<string>; selectedIndex: number; readonly text: string | null; readonly onChanged: NativeEventListener;
   ApplyListChange(): void;
 }
-export interface NativeMovieClip extends NativeObject {playing: boolean; frame: number}
+export interface NativeMovieClip extends NativeObject {playing: boolean; frame: number; color: NativeColor}
 export interface NativeImage extends NativeObject {
-  fillMethod: number; fillOrigin: number; fillClockwise: boolean; fillAmount: number;
+  fillMethod: number; fillOrigin: number; fillClockwise: boolean; fillAmount: number; color: NativeColor;
 }
 /** LGUIResourceLoader 继承原生 GLoader；两种完成事件由 LGUI 的 C# 衔接类提供。 */
 export interface NativeLoader extends NativeObject {
   url: string;
+  fillMethod: number; fillAmount: number; color: NativeColor;
   readonly texture: unknown | null;
   readonly component: NativeComponent | null;
   readonly onLoaded: NativeEventListener;

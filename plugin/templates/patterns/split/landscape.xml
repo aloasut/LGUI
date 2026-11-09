@@ -7,10 +7,10 @@
     <graph id="n6" name="safe" xy="0,0" size="1920,1080" touchable="false">
       <relation target="" sidePair="width-width,height-height"/>
     </graph>
-    <text id="n1" name="title" xy="60,36" size="1200,64" fontSize="44" color="#ffffff" vAlign="middle" autoSize="shrink" singleLine="true" text="标题">
+    <text id="n1" name="title" xy="60,36" size="1200,64" text="标题" fontSize="44" color="#ffffff" vAlign="middle" autoSize="shrink" singleLine="true">
       <relation target="n6" sidePair="left-left,top-top"/>
     </text>
-    <component id="n2" name="closeButton" pkg="{{COMMONID}}" src="{{BUTTONID}}" xy="1620,32" size="240,72">
+    <component id="n2" name="closeButton" src="{{BUTTONID}}" xy="1620,32" size="240,72" pkg="{{COMMONID}}">
       <relation target="n6" sidePair="right-right,top-top"/>
       <Button title="关闭"/>
     </component>
@@ -20,7 +20,7 @@
     <graph id="n4" name="panel" xy="1200,140" size="660,820" type="rect" lineSize="2" lineColor="#3a5070" fillColor="#16202e">
       <relation target="n6" sidePair="left-left,top-top,width-width,height-height"/>
     </graph>
-    <text id="n5" name="detail" xy="1230,170" size="600,760" fontSize="28" color="#d8e2f0" autoSize="height" text="选中一项看详情">
+    <text id="n5" name="detail" xy="1230,170" size="600,760" text="选中一项看详情" fontSize="28" color="#d8e2f0" autoSize="height">
       <relation target="n6" sidePair="left-left,top-top"/>
     </text>
   </displayList>

@@ -4,7 +4,7 @@ import {finding} from './program.mjs';
 import {extractTexts} from '../generate/i18n.mjs';
 
 // 框架自己用到的文本键。
-const FRAMEWORK_KEYS = ['lgui.back', 'lgui.requestFailed'];
+const FRAMEWORK_KEYS = ['lgui.back', 'lgui.requestFailed', 'lgui.time.day', 'lgui.time.hour', 'lgui.time.minute', 'lgui.time.second'];
 
 const placeholders = value => {
   const texts = typeof value === 'string' ? [value] : Object.values(value ?? {}).filter(v => typeof v === 'string');

@@ -39,15 +39,15 @@ async function setup() {
   return {...ctx, CoverView};
 }
 
-test('headless 描述：动效带上时长（毫秒）、自动播放、播放次数', async () => {
+test('headless 描述：动效带上时长（毫秒）、自动播放、播放次数，每一项改哪个控件的哪一类属性', async () => {
   const root = motionFixture();
   await generateProjectTypes(root);
   const bag = JSON.parse(fs.readFileSync(path.join(root, '.lgui/build/headless/Bag.json'), 'utf8'));
   const panel = bag.components.find(c => c.name === 'Bag/BagPanel');
   assert.deepEqual(panel.transitions, [
-    {name: 'pulse', ms: 500, autoPlay: false, times: 1, delay: 0},
-    {name: 'enter', ms: 250, autoPlay: true, times: 1, delay: 0},
-    {name: 'glow', ms: 500, autoPlay: false, times: -1, delay: 0}
+    {name: 'pulse', ms: 500, autoPlay: false, times: 1, delay: 0, items: [{target: 'gold', what: 'alpha'}]},
+    {name: 'enter', ms: 250, autoPlay: true, times: 1, delay: 0, items: [{target: 'gold', what: 'alpha'}]},
+    {name: 'glow', ms: 500, autoPlay: false, times: -1, delay: 0, items: [{target: 'gold', what: 'alpha'}]}
   ]);
 });
 

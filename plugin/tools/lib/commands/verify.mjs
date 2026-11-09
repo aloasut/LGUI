@@ -13,6 +13,7 @@ import {readUiModel} from '../generate/model.mjs';
 import {extractTexts, generateTranslations, translationXml} from '../generate/i18n.mjs';
 import {readTexts, webBuildOptions, writeWebBootstrap, bundleErrors} from '../dev/bundle.mjs';
 import {serveBuilt} from '../dev/index.mjs';
+import {generateFonts} from '../generate/fonts.mjs';
 
 const ACCENTS = {a: 'á', e: 'é', i: 'í', o: 'ó', u: 'ú', A: 'Á', E: 'É', I: 'Í', O: 'Ó', U: 'Ú', c: 'ç', n: 'ñ', y: 'ý'};
 
@@ -75,6 +76,7 @@ export async function runVerify(root, project, {size, view, params, lang} = {}) 
   const model = readUiModel(uiProjectPath(root));
   const i18nDir = path.join(site, 'i18n');
   generateTranslations(root, model, project.languages, i18nDir, project.defaultLanguage);
+  await generateFonts(root, project, model, path.join(site, 'ui', 'fonts'), 'woff2');
   const texts = readTexts(root, project.languages);
   const languages = [...project.languages];
   if (lang === 'pseudo') {

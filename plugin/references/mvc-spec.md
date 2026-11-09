@@ -189,6 +189,8 @@ export class BagView extends View<BagPanelUI> {
 | `dragData` | 任意控件 | 能拖起来；值是松手时交给 `drop` 的数据，`null` 时拖不起来（比如空格子） | `dragData: it => it.id` |
 | `dragIcon` | 写了 `dragData` 的控件 | 拖起时跟手的图标（图片地址），不写用加载器自己的图片或按钮的图标 | `dragIcon: it => it.iconUrl` |
 | `drop` | 任意控件 | 别的控件拖到这里松手时调用，参数是那边的 `dragData`；写在 `ItemView` 里时第二个参数是这一项的数据 | `drop: id => bagController.equip(id)` |
+| `roll` | 配 `text`（数字文字）或 `progress`（进度条） | `{ duration, ease? }`（毫秒，缓动默认 `'Quad.Out'`）：值从旧值平滑滚到新值。`text` 的 `pick` 取出的必须是数字，格式化函数每帧对滚动中的数字调用一次，结果变了才写；两端都是整数时每帧取整。打开时直接显示当前值，不滚；滚动中值又变了，从现在显示的数接着滚、重新计时。不能写在 `ItemView` 里 | `gold: { text: pick(walletModel, s => s.gold, format.number), roll: { duration: 500 } }` |
+| `tick` | 有显示词的任意一项 | 毫秒（正数）：每隔这么久重新算一遍这一项的显示值（`pick` 的取值和格式化、`ItemView` 里的函数），结果变了才写。被全屏界面盖住时不算，露出来马上算一次 | `eventTimer: { text: pick(eventModel, s => s.endsAt, t => format.duration(t - lgui.time.now())), tick: 1000 }` |
 
 - **显示类的值只有两种写法：** 固定值，或 `pick(数据, 取字段, 格式化?)`。`ItemView` 里写成函数：传入这一项的数据，返回要显示的内容。
 - **动作类只调用 Controller 的方法**，一句话写完，View 里不写业务逻辑。
@@ -200,6 +202,8 @@ export class BagView extends View<BagPanelUI> {
 - **拖放（游戏式）：** 被拖的控件不动；拖起时框架在最上面放一个跟手的临时图标（不接收输入），松手就去掉。松在写了 `drop` 的控件上才调用 `drop`，由 Controller 改 Model，列表按数据重画；松在别处什么也不改。只认激活界面里可用的控件；落点重叠时取最里面的（格子在列表里面，算格子的）。
 - **没写进绑定表的控件，代码里一律不碰。** 特殊情况用生命周期钩子（第 9 节），钩子里用 `this.ui.<控件名>`：可以读控件、调用控件的方法，但不给控件的属性赋值。旋转、换语言时组件会重建，钩子里赋的值就丢了；要显示的东西都写进绑定表（`lgui check` 报 `LGUI-MVC-020`）。
 - **不写坐标和尺寸。**
+- **倒计时：** `pick` 取截止时间，格式化函数里减去 `lgui.time.now()`（已和服务器对齐），配 `tick`。`tick` 不和整秒对齐，秒数最多晚不到一个 `tick` 跳；要跳得更准就把 `tick` 写小（比如 250），字符串没变不写，代价很小。归零以后的业务（活动结束）由 Controller 按服务器推送或自己的计时处理，界面上的倒计时只管显示。`this.countdown` 留给每秒要做别的事的特殊情况。
+- **会动的东西：** 用到运行时才知道的（新旧数值、截止时间、第几个、有几个、出了什么事）写代码：绑定的 `roll` / `tick`，或者 `this.tween`（第 16 节）；固定的（入场、常驻的呼吸和闪烁、按钮按下）写进 `ui/`。
 
 ### 6.5 `pick`
 
@@ -342,6 +346,7 @@ keys: Keys = {
 | `lgui.t('bag.sold', { count })` | 取文本，占位符写成 `{count}` |
 | `format.number(n)`、`format.compact(n)`、`format.date(d)`、`format.currency(n, 'CNY')` | 按当前语言格式化；`compact` 是数字缩写：中文 `1.6万`、`1.2亿`、`1万亿`（日文、繁体中文是 `兆`，韩文 `조`），英文 `16.3K`、`1.2M`、`1T`，最多一位小数，四舍五入后够到下一个单位就进位（`999.95` → `1K`，中文 `9999.95` → `1万`），不到缩写的单位时原样（中文 `9999`、英文 `999`）；三端都用框架内置的规则、不用 Intl，同一个数各端显示一样 |
 | `lgui.setLanguage('en')` | 切换语言，已打开的界面自动重建。同时调用几次按调用顺序一个一个切；切换期间（后端换界面包的那一段）已打开的界面先不刷新，切完按当时的数据显示，期间打开的界面（包括排队轮到的 modal）等切完再显示 |
+| `format.duration(毫秒, 'clock' \| 'units')` | 时长，向上取整到秒，负数当 0。`'clock'`（默认）是 `05:09`，满 1 小时是 `1:02:03`；`'units'` 取最大的两个单位：`1天2小时`、`5分9秒`（第二个单位是 0 就不写：`1天`），单位用框架文本键 `lgui.time.day` / `hour` / `minute` / `second`（和 `lgui.back` 一样放在每种语言的文本表里，`lgui check` 查），三端一样、不用 Intl。写法不认识报 `LGUI-RT-285` |
 | `lgui.time.now()`、`lgui.time.setServerOffset(毫秒)` | 当前时间（和服务器对齐） |
 | `await lgui.time.wait(毫秒)` | 等一段时间（Service 模拟延迟、重试间隔用；界面上的定时器用 View 的 `this.after`）。按帧累计，切到后台时不走；请求超时也是这样算的 |
 | `lgui.log.info('bag_opened', { count })` | 写日志（第 14.2 节） |
@@ -424,8 +429,9 @@ test('选中道具后出售，金币增加', async () => {
 | `advance(毫秒)` | 让时钟往前走：headless 是假时钟，按每帧 16 毫秒走；`--browser` 是真的等（一次最多 10 秒） |
 | `sounds()` | 放过的音效，按顺序：`[{ url: 'ui://Common/click', volume: 1 }]`（音量是最终音量） |
 | `music()` | 正在放的背景音乐（`'ui://Common/bgm'`），没有是 `null` |
-| `snapshot()` | 返回 `lgui.debug.snapshot()` |
-| `end()` | 关闭所有界面、清掉界面缓存（`uiCache.keepClosedViews`），检查监听和定时器都已清理 |
+| `look(路径)` | 控件现在的样子：`{ dx, dy, scaleX, scaleY, rotation, alpha, width, height, color?, fontSize?, fillAmount? }`，每一项和 `this.tween` 同一个意思（`dx`、`dy` 是相对 `ui/` 里位置的偏移，其余是绝对值；缩放含按钮的按下效果），控件没有的几项是 `undefined`。打字机露到哪用 `text` 读，进度条用 `value` 读。headless 里尺寸由布局决定、补间又没碰过时，读 `width` / `height` 报 `LGUI-RT-260`；透明度、旋转归 `gearLook` 管时也报 |
+| `snapshot()` | 返回 `lgui.debug.snapshot()`；`views[i].tweens` 是这个界面正在跑的补间数（含 `roll` 和按钮的按下效果） |
+| `end()` | 关闭所有界面、清掉界面缓存（`uiCache.keepClosedViews`），检查监听、定时器和补间都已清理（补间的帧回调也退订了） |
 
 路径写成 `<包>/<组件>.<控件路径>`；列表子项用 `list[序号]`，树的节点也一样（`tree[序号]` 是显示着的第几个节点）。
 
@@ -444,7 +450,7 @@ lgui test tests/layout.test.ts --browser    # 在真浏览器里跑（h5 后端�
 
 - **规则和浏览器一样，照样报错：** 控件树、属性、控制器、显示齿轮（`gearDisplay`、`gearDisplay2`）和组；动效按 `ui/` 里写的时长走；点不到的控件报 `LGUI-RT-032`；只有能滚动（`overflow="scroll"`）的列表能设成虚拟列表（`LGUI-RT-261`）；按钮、标签的文字写进 `title` 子控件；点 Check 按钮切换选中、点 Radio 按钮选中；打字遵守 `maxLength`。
 - **渲染 headless 不算，读到就报 `LGUI-RT-260`：** 关联（relation）、列表和组的排布、文字自动大小和排版度量（`autoSize` 是 both、height）、加载器的自动大小（`autoSize="true"`，尺寸跟着图片）、控件或组上的 `gearXY` / `gearSize`（组上的 `gearSize` 只有带排布的组才改组里控件的尺寸，和 FairyGUI 一样）决定的位置和尺寸。`lgui.ui.find` 读到它们（控件自己或路径上的上级受影响）时报错，写明是哪个控件、哪个原因；不受影响的照常返回（`ui/` 里写的值、框架摆的界面和 `safe`）。屏幕尺寸、安全区变了以后，受关联影响的控件位置会变，这些在 headless 里本来就报不支持。
-- **改属性的齿轮 headless 不模拟，读到就报 `LGUI-RT-260`：** `gearText`（文字）、`gearColor`（颜色）、`gearIcon`（图标、加载器的地址）、`gearLook`（可用、能不能点，还有透明度、旋转）管着的属性跟着控制器的页变。读它（`t.text`、`t.enabled`，或者代码里直接读）、点它（有 `gearLook` 的控件和它的上级 headless 不知道能不能点）都报错，写明是哪个控件、哪个齿轮、哪个控制器。代码自己写过这个属性以后（比如绑定写了文字）headless 就知道它，直到这个控制器再换页。
+- **改属性的齿轮 headless 不模拟，读到就报 `LGUI-RT-260`：** `gearText`（文字）、`gearColor`（颜色）、`gearIcon`（图标、加载器的地址）、`gearLook`（可用、能不能点，还有透明度、旋转）、`gearFontSize`（字号）管着的属性跟着控制器的页变。读它（`t.text`、`t.enabled`，或者代码里直接读）、点它（有 `gearLook` 的控件和它的上级 headless 不知道能不能点）都报错，写明是哪个控件、哪个齿轮、哪个控制器。代码自己写过这个属性以后（比如绑定写了文字）headless 就知道它，直到这个控制器再换页。
 - **headless 不模拟、也不报错的（要看就用 `--browser` 或 `lgui verify`）：** 命中测试（被同级控件挡住的按钮 headless 照样点得到，`--browser` 报 `LGUI-RT-032`）；虚拟列表的回收（headless 里每一项都有对象；浏览器里看不见的项没有对象，`list[序号]` 拿不到，先滚过去）；按钮直接绑控制器、按钮选中时的 `selectedTitle`；悬停时按钮的 over 页。
 
 **什么时候用 `--browser`：** 要测位置、尺寸、安全区、文字排版、谁挡住了谁、改属性的齿轮换页以后的样子，或者确认 headless 绿了的测试在浏览器里也对。同一个测试文件、同一套 `t.*`，在 Chrome 或 Edge 里用 h5 后端跑，点击、拖拽、打字发的是真实的鼠标、触摸、键盘输入。和 headless 的差别：
@@ -591,3 +597,71 @@ export class MainView extends View<MainViewUI> {
 - 音量和静音改了自动存进本地存储（键 `lgui.sound`），下次启动恢复；存的东西坏了记 `warn`（`LGUI-RT-175`），用默认值（都是 1、不静音）。
 - 静音的声道：音效不放；背景音乐照常往下走，只是音量是 0，取消静音时接着放。
 - 声道不是 `music` / `sfx`、音量不在 0–1、静音不是布尔值，报 `LGUI-RT-174`；`ui://` 声音没登记报 `LGUI-RT-170`；声音文件加载失败记 `warn`（`LGUI-RT-026`）。
+
+## 16. 代码补间
+
+代码里让控件动起来只有三个方法，写在 View 和 `PartView` 里（`ItemView`、Controller、Model 里没有，写了是 TypeScript 编译错误）：
+
+```ts
+this.tween(目标, 终值, 选项): Promise<void>      // 目标是 this.ui.<控件> 或它们的数组
+this.stopTweens(目标?, { complete?: boolean })    // 不写目标是这个界面的全部
+this.itemsOf(列表): UIComponent[]                 // 列表的子项，按序号排好；虚拟列表报 LGUI-RT-281
+```
+
+在生命周期钩子、`this.after` / `this.every` 的回调、`this.on` 的收听回调里调用。Model、Controller 那边出了事要动一下：用广播站通知 View（`this.on`），或者用 `ui/` 动效的 `play` 绑定。
+
+**属性**（一次可以写好几项；控件不支持某一项报 `LGUI-RT-280`）：
+
+| 属性 | 用在 | 值 |
+|---|---|---|
+| `dx`、`dy` | 任意控件 | 相对 `ui/` 里位置的偏移（设计尺寸的像素），0 就是原位 |
+| `scale`、`scaleX`、`scaleY` | 任意控件 | 倍数。`scale` 等于同时写 `scaleX` 和 `scaleY`，不能和它们写在一起 |
+| `rotation` | 任意控件 | 角度（度） |
+| `alpha` | 任意控件 | 0–1；中间值夹在 0–1（`Back.Out` 这类会冲过头） |
+| `width`、`height` | 任意控件 | 设计尺寸的像素，会重新排版 |
+| `color` | 文字、富文本、输入框（字色）；按钮、标签（标题颜色）；图片、加载器、序列帧（着色，白色是原色）；图形（填充色） | `'#rrggbb'`，R、G、B 分别插值；透明度用 `alpha` |
+| `fontSize` | 文字、富文本、输入框；按钮、标签（标题字号） | 像素，每帧取整，会重新排版 |
+| `fillAmount` | 图片、加载器 | 0–1；`ui/` 里要先设了填充方式 |
+| `progress` | 进度条 | 0–100，和绑定词 `progress` 同一个单位 |
+| `chars` | 文字、富文本、输入框；按钮、标签（标题） | 显示到第几个字（打字机），每帧向下取整 |
+
+- 只有 `dx`、`dy` 是相对值，其余都是绝对值，和 `ui/` 里的属性同一个意思。原位跟着关联走：补间结束以后控件又被关联挪过、拉过（屏幕尺寸变了），下一次补间的偏移和关闭时的还原都按关联算出来的位置、尺寸。`LGUI-MVC-015`（不写坐标和尺寸）管的是直接给控件赋值，不管 `tween` 的终值。
+- **`chars`：** 文字本身照旧由绑定表的 `text` 决定，`chars` 只管露出前几个字。富文本里的 UBB 标签整段带上、不拆开，只数看得见的字（一张 `[img]…[/img]` 图片算一个，不在地址中间截断）。放完、终值不少于字数时恢复成「全部显示」；没有 `chars` 补间在走时文字换了，也恢复全部显示。
+
+**选项：** `duration`（毫秒，必填；有重复时是一轮的时长）、`ease`（写法和 `ui/` 的 XML 一样，31 个，默认 `'Quad.Out'`）、`delay`（毫秒，只在开头等一次；目标是数组时可以写成 `i => i * 80`）、`from`（起点：调用时马上生效，在 `delay` 之前）、`repeat`（再重复几次，`-1` 一直循环）、`yoyo`（重复时来回走）。抖动、回弹不另开接口：
+
+| 效果 | 写法 |
+|---|---|
+| 弹一下（回到原样） | `{ scale: 1.3 }`，`{ duration: 120, repeat: 1, yoyo: true }` |
+| 弹出来（冲过头一点再停） | `{ scale: 1 }`，`{ from: { scale: 0 }, duration: 250, ease: 'Back.Out' }` |
+| 来回抖几下（回到原位） | `{ dx: 10 }`，`{ duration: 40, repeat: 5, yoyo: true, ease: 'Sine.InOut' }` |
+| 越抖越小 | `{ dx: 0 }`，`{ from: { dx: 12 }, duration: 500, ease: 'Elastic.Out' }` |
+
+```ts
+async onOpen() {
+  // 道具逐个弹出（道具和按钮在 ui/ 里的轴心是 (0.5, 0.5)），全部放完再淡入按钮
+  await this.tween(this.itemsOf(this.ui.rewards), { scale: 1 }, { from: { scale: 0 }, duration: 250, ease: 'Back.Out', delay: i => i * 80 });
+  await this.tween(this.ui.okButton, { alpha: 1 }, { from: { alpha: 0 }, duration: 150 });
+}
+```
+
+**Promise：** 放完时 resolve（`stopTweens(…, { complete: true })` 跳到终值也算放完）；目标是数组时全部放完才 resolve；一直循环的只有被 `complete` 停下才 resolve。别的停止（`stopTweens` 不带 `complete`、被同一属性的新补间接管完、界面关闭）都不 resolve：`await` 链只在上一步真的放完才往下走，被打断的链自然断掉。要「点一下跳过整段」的，用 `delay` 错开、一次全部创建，再 `stopTweens(undefined, { complete: true })`。补间放完不能当作业务完成（发奖、扣钱以 Controller 的结果为准）。
+
+**跟着界面走：**
+
+| 情况 | 补间 |
+|---|---|
+| 被全屏界面盖住 | 暂停（`delay` 也停），露出来接着走；被弹窗压住但没盖住照常走 |
+| 旋转、换语言重建 | 正在走的按同一路径（`header.icon`、`rewards[2]`）换到新组件上接着走，进度不变；放完的不带过去，新组件是 `ui/` 里的样子（终值尽量就是 `ui/` 里的样子）；新组件上找不到报 `LGUI-RT-281` |
+| 列表的 `items` 变了 | 这个列表子项上的补间跳到终值（子项会重新分配），算放完 |
+| 界面关闭 | 全部停掉；碰过的属性还原成 `ui/` 里的值（界面可能被缓存，下次打开要是原样） |
+
+**一个属性一个主人：** 两个补间改同一个控件的同一个属性，后来的接管，从当前值接着走（按属性算，`scale` 拆成 `scaleX`、`scaleY`）。补间碰上别的主人报 `LGUI-RT-282`：齿轮（`gearXY` 管 `dx`/`dy`，`gearSize` 管尺寸和缩放，`gearLook` 管透明度和旋转，`gearColor`、`gearFontSize`）、正在放的 `ui/` 动效里改这个属性的项（绑定表开始放动效时也反过来查）、按钮的 `downEffect="scale"`（缩放）和 `downEffect="dark"`（按钮里各控件的颜色）、绑定表的 `progress` 和长按的 `holdProgress`、写了 `roll` 的文字（`chars`）。两方都要动同一个属性就套一层：外层归一方、里层归另一方，效果相乘（缩放、透明度）或相加（位置、旋转）。补间进行中位置被关联挪了，按新的原位接着算偏移；尺寸被关联拉了，接着往终值写；别的属性被改了开发模式下报 `LGUI-RT-282`。
+
+**轴心：** 补缩放或旋转时控件的轴心是 (0, 0) 报 `LGUI-RT-283`（会从左上角缩放、绕左上角转）。要从一边拉长（血条用 `scaleX`），在 `ui/` 里把轴心设成 (0, 0.5) 这类。
+
+**按钮的按下与回弹：** 按钮组件写了 `downEffect="scale"`（`downEffectValue` 是按下时的缩放，不写是 0.8）的，框架接管 FairyGUI 原来「一下子缩小」的效果：按下 50 毫秒缩到 `downEffectValue`（`Quad.Out`），松开 100 毫秒弹回（`Back.Out`），参数写死。不用写代码、不用进绑定表（没绑 `click` 的按钮照样有），盖住暂停、关闭停掉和补间一样；连点时松开的接管按下的；按下和松开来自框架的手势识别，按住以后手指移出点击的范围（比如在可滚动列表里开始拖动）就弹回。只是视觉效果，不改按钮的位置、尺寸。加载器加载出来的组件里的按钮框架走不到，保持 FairyGUI 原来的一下子缩小（三端一样）。
+
+**报错**（都是写错了：开发和测试里抛错，正式构建记 `error` 日志、这次调用不生效，不抛进 Controller——绑定开始放的动效和补间抢属性时这次不放，`roll` / `tick` 写错时照常显示、不滚、不定时重算，`itemsOf` 返回空数组）：`LGUI-RT-280` 参数不对，`LGUI-RT-281` 目标不对，`LGUI-RT-282` 属性还有别的主人，`LGUI-RT-283` 轴心是 (0, 0)，`LGUI-RT-284` `roll` / `tick` 写法不对。详见 [error-codes.md](error-codes.md)。
+
+**代价**（从便宜到贵）：`scale`、`rotation`、`alpha` 不重新排版；文字、图形的 `color` 只重画这一块；浏览器端图片着色每次换一个颜色滤镜，最贵，只用在少数几个上；`dx`、`dy` 带动关联它的控件；`width`、`height`、`fontSize` 会重新排版整棵子树。成片错开优先用 `scale`、`alpha`；滚动的数字、倒计时、打字机用定宽加对齐，不要用 Shrink 和自动宽度。没有补间时零开销（不订阅帧回调）；`lgui.debug.snapshot()` 里有每个界面的补间数。

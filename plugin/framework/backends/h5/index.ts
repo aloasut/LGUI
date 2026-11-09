@@ -3,6 +3,7 @@ import * as fgui from './vendor/fairygui.module.js';
 import type {Backend, BackendConfig, Platform, UIComponent} from '../../core/index';
 import {LgRuntimeError} from '../../core/index';
 import {createH5Platform} from './platform/index';
+import {loadFonts} from './fonts';
 import {installFairyGuiPatches} from './fairygui-patches/index';
 import {setNineSliceOverlap} from './fairygui-patches/nine-slice';
 import {stage} from './scale';
@@ -27,7 +28,7 @@ export function createH5Backend(): Backend {
       if (config.defaultFont) fgui.UIConfig.defaultFont = config.defaultFont;
       i18nBase = config.i18nBase;
       uiBaseUrl = config.uiBase;
-      await fgui.UIPackage.loadImageManifest(`${config.uiBase}/manifest.json`);
+      await Promise.all([fgui.UIPackage.loadImageManifest(`${config.uiBase}/manifest.json`), loadFonts(config.uiBase, config.fonts ?? [])]);
       platform = createH5Platform(config.projectName, config.uiBase);
       // 九宫格的块要互相重叠 1 个设备像素（补丁 12）：根节点缩放变了就更新重叠宽度
       const screen = platform.screen;

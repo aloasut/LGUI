@@ -83,7 +83,7 @@ ui/
 
 - 每个组件 XML 和图片都要登记；登记的文件必须存在，存在的文件也都要登记。
 - **九宫格：** 在图片上写 `scale="9grid"` 和 `scale9grid="左,上,宽,高"`（中间可拉伸区域），区域不能超出图片。边距按图片真实的边框像素取，不要统一取边长的四分之一。
-- **图集：** 生成时按包自动打图集，一般不用管。每张图不能比所在包的图集上限大。全局上限是 `ui/settings/Publish.json` 里的 `atlasSetting.maxSize`（编辑器「发布设置」里改的就是它），没写是 4096×4096；超了生成时报 `LGUI-CLI-113`，写明是哪张图、上限是从哪来的。某个包确实要更大的图，在它的 `package.xml` 里 `</resources>` 后面写 `<publish name="包名" maxAtlasSize="8192"/>`（多数手机支持到 4096，更大先确认目标设备）。
+- **图集：** 生成时按包自动打图集，一般不用管。每张图不能比所在包的图集上限大。全局上限是 `ui/settings/Publish.json` 里的 `atlasSetting.maxSize`（编辑器「发布设置」里改的就是它），没写是 4096×4096；超了生成时报 `LGUI-CLI-113`，写明是哪张图、上限是从哪来的。某个包确实要更大的图，在它的 `package.xml` 已有的 `<publish name="包名">` 上加 `maxAtlasSize="8192"`（`lgui init`、`lgui new` 建的包都已经有一个空的 `<publish>`，再加第二个不生效；没有才在 `</resources>` 后面写 `<publish name="包名" maxAtlasSize="8192"/>`）。多数手机支持到 4096，更大先确认目标设备。
 - **声音：** mp3，登记成 `<sound>` 并导出（`exported="true"`）。代码和 View 的 `static music` 里写 `ui://<包名>/<声音名>`（`ui://Bag/coin`）；按钮的 `sound` 属性和别的资源引用一样写 `ui://<包ID><资源ID>`（`ui://bag00001coin0001`）。用法见 MVC 开发规范第 15 节。
 - `lgui art split`、`lgui art cut` 拆出来的小图会自动登记。
 
@@ -225,7 +225,7 @@ ui/
 </component>
 ```
 
-**按下效果**写在按钮组件根节点的 `<Button>` 上：`<Button downEffect="scale" downEffectValue="0.95"/>` 按下缩到 95%（轴心自动设在按钮中间），`<Button downEffect="dark" downEffectValue="0.8"/>` 按下变暗到 80%；不写是没有效果。`downEffectValue` 不写是 0.8。
+**按下效果**写在按钮组件根节点的 `<Button>` 上：`<Button downEffect="scale" downEffectValue="0.95"/>` 按下缩到 95%，由框架带缓动地补：按下 50 毫秒缩小（`Quad.Out`），松开 100 毫秒弹回（`Back.Out`），参数固定；只是视觉效果，按按钮中间缩放，不改位置和尺寸。按钮本身的缩放归它管，别的动效、代码补间要缩放就放在里面的子组件上（运行时报 `LGUI-RT-282`）；加载器加载出来的组件里的按钮保持 FairyGUI 原来的一下子缩小，`<Button downEffect="dark" downEffectValue="0.8"/>` 按下变暗到 80%；不写是没有效果。`downEffectValue` 不写是 0.8。
 
 **标签组件**（`extention="Label"`，标题和图标控件名固定为 `title`、`icon`，实例上的 `<Label title>`、绑定表的 `text` 只写进 `title`；不能点选，要点的用按钮）：
 
@@ -403,7 +403,15 @@ ui/
 
 ## 8. 文字
 
-- **默认字体**在工程配置 `defaultFont` 里设置；XML 里不写 `font`，除非这一处必须用别的字体。
+- **字体**：项目自带的字体文件放 `ui/fonts/<名字>.ttf` 或 `.otf`，文件名（去掉扩展名）就是字体名，以大写字母开头、只用字母和数字（比如 `NotoSansSC.otf`、`TitleBold.ttf`），不能和 CSS 的通用字体名或关键字同名（`Serif`、`Monospace`、`Cursive`、`Fantasy`、`Math`、`Emoji`、`Fangsong`、`Inherit`、`Initial`、`Unset`、`Default`、`Revert`，不分大小写；网页上会按系统字体画）。默认字体在工程配置 `defaultFont` 里写这个名字；某一处要用别的字体，XML 写 `font="<名字>"`，富文本写 `[font=<名字>]…[/font]`。`font` 只能写 `ui/fonts/` 里有的名字，系统字体名（各平台不一样）、包里的 `ui://` 字体资源都报 `LGUI-UI-080`。`defaultFont` 是 `null` 时用系统默认字体。
+  - **自动精简**：`lgui dev`、`verify`、`test --browser`、`unity export` 按项目实际用到的字做子集（网页 WOFF2，Unity 原格式）：ASCII 可见字符、`ui/` 里写的文字、`i18n/` 全部语言的文案、框架自己显示的字（`format.compact` 的「万」「亿」等）。几 MB 的中文字体一般只剩几十 KB。
+  - **缺字报错**（`lgui check` 和上面这些命令都报 `LGUI-CLI-141`，写明是哪个字、在哪里）：`ui/` 里的每段固定文字按显示它的那个文字控件的字体查。文字控件看自己的 `font`；按钮、标签、下拉框、列表项的标题（`title`、`selectedTitle`、下拉框的选项、`<item title>`）看那个组件里名为 `title` 的文字控件的 `font`；`gearText` 的值跟着它所在的控件；没写 `font` 的是默认字体。`i18n/` 里和 `ui/` 文字同一个键的翻译跟着那个控件的字体，其余文案和框架自己显示的字查默认字体。表情符号这类字体里没有的字改用图片或 ArtText。
+  - **多语言工程的默认字体要覆盖所有语言**：所有字体用同一个字集，`i18n/` 里全部语言的文案都按上面的规则查（代码里 `lgui.t` 用的文案查默认字体）。比如中文加韩文的工程，默认字体要同时有中文和韩文，否则报 `LGUI-CLI-141`。
+  - **运行时才知道的文字**（玩家名、服务器下发的数据、输入框里打的字）不在子集里的字，按字换成系统字体显示，不报错。网页上由浏览器换；Unity 上每个项目字体后面挂一个系统字体做的 TMP 回退字体（iOS、macOS 用苹方，Android 用系统自带的 Noto Sans CJK 等，Windows 用微软雅黑）。这只对 iOS、Android、电脑的原生包有效：Unity 出微信小游戏或 WebGL 时读不到系统字体，子集外的字会显示成方框，到时要在 `ui/fonts/` 里带一个常用字字体。设备上一个候选的系统字体都没找到时，Unity 只记一次 `LGUI-RT-182` 错误日志，游戏照常运行，缺的字显示方框。
+  - **Unity 上用 TextMesh Pro**：TMP 建字体要用 Unity 工程里的 TMP 必需资源（TMP Essential Resources，里面有 TMP Settings）。`lgui unity export` 发现工程里没有 TMP Settings 时，会从 Unity 自带的 `com.unity.ugui` 资源包里导入它们（不联网，只写工程里还没有的文件；已有 TMP Settings 的工程不动），不用手动点菜单。项目字体在 Unity 上是动态 TMP 字体，字第一次出现时才画进图集（不在编辑器里提前烘），图集满了自动开新的一张。字第一次出现时要现画，一次出很多新字的界面要在真机上看耗时，卡了再改成提前烘。
+  - **表情符号不支持**（网页、Unity 都是）：字体里没有的表情由系统按字回退，各平台显示不一样，Unity 上可能是方框。以后要支持，在 Unity 上用 TMP 的 Sprite Asset 做。
+  - 粗体照旧写 `bold="true"`（由浏览器、Unity 加粗）；要真正的粗体字重，再放一个粗体文件当另一个字体用。可变字体、字体集（TTC）、WOFF 不收（`LGUI-CLI-140`），用单字重的 TTF / OTF。
+  - **字体许可由项目自己负责**。生成子集算修改了字体（OFL FAQ 2.6）。LGUI 不改字体内部的名字（字体文件里的 name 表照原样留着），只是网页上按文件名引用。OFL 字体如果声明了保留字体名（Reserved Font Name，写在许可里版权声明的后面），修改版不能用这个名字，包括字体内部用来选字体的名字（OFL FAQ 5.3），只改文件名可能不够。这种字体要项目自己处理（比如取得作者许可，或者先自己改好字体内部的名字再放进 `ui/fonts/`），或者换一个没有保留字体名的字体。具体要求请对照字体自带的许可。
 - **最小字号 20**（按设计尺寸）。小于 20 时 `lgui check` 报 `LGUI-UI-011`；没写 `fontSize` 的按 FairyGUI 默认的 12 号算，也报。
 - **每个文字控件都要声明文字超长时怎么处理**，就是 `autoSize` 的取值：
 
@@ -527,5 +535,6 @@ ui/
 | `LGUI-UI-067` | 动效里旋转、缩放的控件设了轴心 | `pivot="0.5,0.5"`（要绕左上角写 `pivot="0,0"`） | 不写 `pivot` 就做 `Rotation` / `Scale` |
 | `LGUI-UI-068` | `shrink`、`ellipsis` 的文字，框只放得下一行时写 `singleLine="true"` | `size="300,40" fontSize="28" autoSize="shrink" singleLine="true"` | `size="300,40" fontSize="28" autoSize="shrink"` |
 | `LGUI-UI-069` | 动效的目标不是普通组（普通组只在编辑时有，生成界面包时会被去掉，动效动不了它） | 要动整组就用高级组 `<group … advanced="true"/>`，或者让动效直接动组里的控件 | `<group id="n8" …/>` + `<item type="XY" target="n8" …/>` |
+| `LGUI-UI-080` | XML 的 `font`、富文本的 `[font=…]`（也查 `i18n/` 的文案）只写 `ui/fonts/` 里的字体名 | `font="NotoSansSC"` | `font="Microsoft YaHei"`、`font="ui://bag00001font0001"` |
 
 靠人看、机器查不出的：图里不放文字；同一个工程的图风格一致；文字在各尺寸下没有被截断（看 `lgui verify` 的截图）。

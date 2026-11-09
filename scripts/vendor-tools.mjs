@@ -17,7 +17,9 @@ export const tools = {
   '@openfairygui/functions': '0.7.0',
   '@openfairygui/cli': '0.7.0',
   'sharp': '0.34.5',
-  'playwright-core': '1.64.1'
+  'playwright-core': '1.64.1',
+  'harfbuzzjs': '1.6.4',
+  'wawoff2': '2.0.1'
 };
 export const platforms = [['darwin', 'arm64'], ['darwin', 'x64'], ['linux', 'x64'], ['win32', 'x64']];
 // 每个平台各留一份的原生包；其余平台（musl、arm64 Linux、Windows arm64 等）一律不带。
@@ -74,6 +76,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const dir = path.join(work, `${platform}-${cpu}`);
     fs.mkdirSync(dir);
     fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
+    // 已有的锁文件带上：已经带的包（含间接依赖）版本不变，只补新加的。
+    if (fs.existsSync(path.join(vendor, 'package-lock.json'))) fs.copyFileSync(path.join(vendor, 'package-lock.json'), path.join(dir, 'package-lock.json'));
     console.log(`安装 ${platform}/${cpu} …`);
     // Linux 只带 glibc 版；在非 Linux 机器上装时要显式指定，否则 npm 会跳过要求 glibc 的包。
     const libc = platform === 'linux' ? ['--libc=glibc'] : [];

@@ -96,7 +96,7 @@ Windows Player 可设置为 Windowed 并开启 Resizable Window，通过改变�
 
 ## 接入后要看的三件事
 
-1. **文字。** Unity 和浏览器测量文字的方式不同；检查项目使用的字体、中文和其他语言有没有缺字或截断，横竖两版都看。
+1. **文字。** Unity 和浏览器测量文字的方式不同；检查项目使用的字体、中文和其他语言有没有缺字或截断，横竖两版都看。项目字体（`ui/fonts/`）由 `lgui unity export` 做成子集写到 `Assets/LGUI/Resources/UI/fonts/`，启动时用它建动态的 TextMesh Pro 字体。TMP 建字体要用工程里的 TMP 必需资源（TMP Essential Resources，里面有 TMP Settings）：工程用了项目字体、又没有 TMP Settings 时，`lgui unity export` 会从 `com.unity.ugui` 自带的资源包 `Package Resources/TMP Essential Resources.unitypackage` 导入（不联网，只写工程里还没有的文件，已有 TMP Settings 的工程不动；按顺序找工程的 `Library/PackageCache/com.unity.ugui@…/`、`Packages/com.unity.ugui/`、Unity Hub 默认安装位置里这个版本的内置包，找不到报 `LGUI-CLI-143`），运行时还是没有就报 `LGUI-RT-181`。TMP 字体（字第一次出现时才画进图集、满了开新图集），按名字注册给 FairyGUI（注册不上报 `LGUI-RT-181`）。Unity 包依赖 `com.unity.ugui`（Unity 6 起自带 TextMesh Pro），FairyGUI 的 TMP 支持靠它打开。子集外的字（聊天、玩家名）由挂在后面的系统字体 TMP 回退字体显示：iOS、macOS 苹方，Android 系统的 Noto Sans CJK 等，Windows 微软雅黑；一个都没找到时记一次 `LGUI-RT-182`，缺的字显示方框。系统字体回退只对 iOS、Android、电脑原生包有效，出微信小游戏或 WebGL 时读不到系统字体，要带常用字字体。表情符号这次不支持（以后用 TMP Sprite Asset）。一次出很多新字的界面，在真机上看第一次出字的耗时。
 2. **平台服务。** Unity 存档位于 `Application.persistentDataPath/LGUI/` 下，按工程和键名隔离；它与浏览器存储各自独立。HTTP 使用 UnityWebRequest，检查产品实际使用的地址、权限和错误处理。WebSocket 暂未实现，会报 `LGUI-RT-001`。
 3. **格式化。** 本次 Windows 验证使用的 PuerTS 3.0.3 V8 没有 `Intl`。框架会使用内置千分位、`年-月-日 时:分` 和 `货币代码 数值` 格式；中文、日文、韩文复数取 `other`，其他语言按 `1/其他` 区分。日期、货币和部分数字显示可能与浏览器的 `Intl` 不同，应按产品用到的语言和值核对。
 

@@ -5,6 +5,7 @@ import {asActor} from '../actor';
 import type {ItemKey} from '../types';
 import type {BindContext} from './index';
 import {adoptChild, watch} from './index';
+import {completeTweensUnder} from '../tween/engine';
 
 /** 列表子项 View 的内部接口（ItemView 实现它）。 */
 export interface ItemViewInstance {
@@ -45,6 +46,8 @@ export function bindList(list: UIList, binding: Record<string, unknown>, ctx: Bi
   if ('items' in binding) {
     watch<readonly unknown[]>(binding.items, ctx, value => {
       const position = list.scrollPosition;
+      // 子项会重新分配：子项上的代码补间先跳到终值（算放完）。
+      completeTweensUnder(list);
       items = value;
       list.numItems = items.length;
       list.scrollPosition = position;

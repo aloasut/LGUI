@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component size="220,56">
   <displayList>
-    <text id="n0" name="key" xy="0,0" size="80,56" fontSize="24" color="#6aa7ff" align="center" vAlign="middle" autoSize="shrink" singleLine="true" text=""/>
-    <text id="n1" name="label" xy="88,0" size="132,56" fontSize="24" color="#ffffff" vAlign="middle" autoSize="ellipsis" singleLine="true" text=""/>
+    <text id="n0" name="key" xy="0,0" size="80,56" text="" fontSize="24" color="#6aa7ff" align="center" vAlign="middle" autoSize="shrink" singleLine="true"/>
+    <text id="n1" name="label" xy="88,0" size="132,56" text="" fontSize="24" color="#ffffff" vAlign="middle" autoSize="ellipsis" singleLine="true"/>
   </displayList>
 </component>

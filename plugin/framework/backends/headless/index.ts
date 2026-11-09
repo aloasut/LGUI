@@ -44,6 +44,8 @@ export interface HeadlessState {
   logs: HeadlessLogRecord[];
   /** 剪贴板里的文字（writeText 写进来，测试里可以直接读、也可以先放好）。 */
   clipboard: string;
+  /** backend.init 时传进来的项目字体名（只登记，不读字体文件；文字度量照样报 LGUI-RT-260）。 */
+  fonts: string[];
   /** 当前告诉游戏场景的输入模式。 */
   inputMode: 'ui' | 'game' | 'all';
   /** 已加载的包。 */
@@ -102,7 +104,7 @@ export function createHeadlessBackend(packages: readonly PackageDescriptor[], tr
     return found ?? null;
   };
   const state: HeadlessState = {
-    now: 0, screen: {width: 1920, height: 1080}, safeArea: {top: 0, right: 0, bottom: 0, left: 0}, languages: ['zh-CN'], storage: new Map(), sounds: [], music: null, audioPaused: false, logs: [], clipboard: '', inputMode: 'ui', loaded: new Set(),
+    now: 0, screen: {width: 1920, height: 1080}, safeArea: {top: 0, right: 0, bottom: 0, left: 0}, languages: ['zh-CN'], storage: new Map(), sounds: [], music: null, audioPaused: false, logs: [], clipboard: '', fonts: [], inputMode: 'ui', loaded: new Set(),
     handlers: {frame: new Handlers(), visibility: new Handlers(), pointer: new Handlers(), key: new Handlers(), wheel: new Handlers(), resize: new Handlers()}
   };
   let prefix = '';
@@ -157,7 +159,7 @@ export function createHeadlessBackend(packages: readonly PackageDescriptor[], tr
     state,
     root,
     platform,
-    async init(config: BackendConfig) { prefix = `lgui:${config.projectName}:`; },
+    async init(config: BackendConfig) { prefix = `lgui:${config.projectName}:`; state.fonts = [...config.fonts ?? []]; },
     loadPackage: name => platform.resource.loadPackage(name),
     releasePackage: name => platform.resource.releasePackage(name),
     create<Name extends string>(packageName: string, componentName: string): UIComponent<Name> {

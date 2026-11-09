@@ -7,13 +7,13 @@
     <graph id="n4" name="safe" xy="0,0" size="1080,1920" touchable="false">
       <relation target="" sidePair="width-width,height-height"/>
     </graph>
-    <text id="n1" name="title" xy="40,760" size="1000,120" fontSize="64" color="#ffffff" align="center" vAlign="middle" autoSize="shrink" singleLine="true" text="你好，LGUI">
+    <text id="n1" name="title" xy="40,760" size="1000,120" text="你好，LGUI" fontSize="64" color="#ffffff" align="center" vAlign="middle" autoSize="shrink" singleLine="true">
       <relation target="n4" sidePair="center-center,middle-middle"/>
     </text>
-    <text id="n3" name="status" xy="40,1060" size="1000,56" fontSize="32" color="#9fb3c8" align="center" vAlign="middle" autoSize="shrink" singleLine="true" text="">
+    <text id="n3" name="status" xy="40,1060" size="1000,56" text="" fontSize="32" color="#9fb3c8" align="center" vAlign="middle" autoSize="shrink" singleLine="true">
       <relation target="n4" sidePair="center-center,middle-middle"/>
     </text>
-    <component id="n2" name="button" pkg="cmn00001" src="button01" xy="420,960" size="240,72">
+    <component id="n2" name="button" src="button01" xy="420,960" size="240,72" pkg="cmn00001">
       <relation target="n4" sidePair="center-center,middle-middle"/>
       <Button title="点我"/>
     </component>

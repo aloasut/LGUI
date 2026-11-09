@@ -1,6 +1,10 @@
 {
   "lgui.back": "Back",
   "lgui.requestFailed": "Request failed ({code})",
+  "lgui.time.day": "{n}d",
+  "lgui.time.hour": "{n}h",
+  "lgui.time.minute": "{n}m",
+  "lgui.time.second": "{n}s",
   "Common/Confirm/title": "Notice",
   "Common/Confirm/cancel": "Cancel",
   "Common/Confirm/ok": "OK",

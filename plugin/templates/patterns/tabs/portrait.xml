@@ -8,28 +8,28 @@
     <graph id="n7" name="safe" xy="0,0" size="1080,1920" touchable="false">
       <relation target="" sidePair="width-width,height-height"/>
     </graph>
-    <text id="n1" name="title" xy="60,36" size="660,64" fontSize="44" color="#ffffff" vAlign="middle" autoSize="shrink" singleLine="true" text="标题">
+    <text id="n1" name="title" xy="60,36" size="660,64" text="标题" fontSize="44" color="#ffffff" vAlign="middle" autoSize="shrink" singleLine="true">
       <relation target="n7" sidePair="left-left,top-top"/>
     </text>
-    <component id="n2" name="closeButton" pkg="{{COMMONID}}" src="{{BUTTONID}}" xy="780,32" size="240,72">
+    <component id="n2" name="closeButton" src="{{BUTTONID}}" xy="780,32" size="240,72" pkg="{{COMMONID}}">
       <relation target="n7" sidePair="right-right,top-top"/>
       <Button title="关闭"/>
     </component>
-    <component id="n3" name="firstTab" pkg="{{COMMONID}}" src="{{BUTTONID}}" xy="60,1720" size="240,72">
+    <component id="n3" name="firstTab" src="{{BUTTONID}}" xy="60,1720" size="240,72" pkg="{{COMMONID}}">
       <relation target="n7" sidePair="left-left,bottom-bottom"/>
       <Button title="第一页"/>
     </component>
-    <component id="n4" name="secondTab" pkg="{{COMMONID}}" src="{{BUTTONID}}" xy="320,1720" size="240,72">
+    <component id="n4" name="secondTab" src="{{BUTTONID}}" xy="320,1720" size="240,72" pkg="{{COMMONID}}">
       <relation target="n7" sidePair="left-left,bottom-bottom"/>
       <Button title="第二页"/>
     </component>
-    <text id="n5" name="firstContent" xy="60,140" size="960,400" fontSize="32" color="#ffffff" autoSize="height" text="第一页的内容">
-      <relation target="n7" sidePair="left-left,top-top"/>
+    <text id="n5" name="firstContent" xy="60,140" size="960,400" text="第一页的内容" fontSize="32" color="#ffffff" autoSize="height">
       <gearDisplay controller="tabs" pages="0"/>
-    </text>
-    <text id="n6" name="secondContent" xy="60,140" size="960,400" fontSize="32" color="#ffffff" autoSize="height" text="第二页的内容">
       <relation target="n7" sidePair="left-left,top-top"/>
+    </text>
+    <text id="n6" name="secondContent" xy="60,140" size="960,400" text="第二页的内容" fontSize="32" color="#ffffff" autoSize="height">
       <gearDisplay controller="tabs" pages="1"/>
+      <relation target="n7" sidePair="left-left,top-top"/>
     </text>
   </displayList>
 </component>

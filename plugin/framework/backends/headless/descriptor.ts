@@ -1,5 +1,5 @@
 // lgui 生成的 headless 描述（.lgui/build/headless/<包名>.json）的类型。
-import type {UIKind} from '../../core/index';
+import type {TransitionTouch, UIKind} from '../../core/index';
 
 /** 控制显示的齿轮（页名已经从页 ID 换好）。 */
 export interface GearsDescriptor {
@@ -7,12 +7,12 @@ export interface GearsDescriptor {
   display?: {controller: string; pages: string[]};
   /** gearDisplay2：再加一个条件，condition 0 是「并且」、1 是「或者」。 */
   display2?: {controller: string; pages: string[]; condition: number};
-  /** 改属性的齿轮（gearText、gearColor、gearIcon、gearLook）和它跟的控制器：headless 不模拟，读到它管的属性时报 LGUI-RT-260。 */
+  /** 改属性的齿轮（gearText、gearColor、gearIcon、gearLook、gearFontSize）和它跟的控制器：headless 不模拟，读到它管的属性时报 LGUI-RT-260；代码补间碰它管的属性报 LGUI-RT-282。 */
   props?: {gear: PropGear; controller: string}[];
 }
 
-/** 改属性的齿轮：gearText 改文字，gearColor 改颜色，gearIcon 改图标（加载器的地址），gearLook 改透明度、旋转、变灰和能不能点。 */
-export type PropGear = 'gearText' | 'gearColor' | 'gearIcon' | 'gearLook';
+/** 改属性的齿轮：gearText 改文字，gearColor 改颜色，gearIcon 改图标（加载器的地址），gearLook 改透明度、旋转、变灰和能不能点，gearFontSize 改字号。 */
+export type PropGear = 'gearText' | 'gearColor' | 'gearIcon' | 'gearLook' | 'gearFontSize';
 
 /** 位置和尺寸由谁决定（headless 不算这些布局，读到受影响的位置、尺寸时报 LGUI-RT-260）。 */
 export interface LayoutDescriptor {
@@ -68,6 +68,20 @@ export interface ChildDescriptor {
     autoSize?: string;
     /** 输入框最多能输入几个字（UTF-16 长度），不写是不限。 */
     maxLength?: number;
+    /** 轴心（0–1），不写是 (0, 0)。 */
+    pivot?: [number, number];
+    /** 缩放，不写是 (1, 1)。 */
+    scale?: [number, number];
+    /** 旋转（度），不写是 0。 */
+    rotation?: number;
+    /** 透明度，不写是 1。 */
+    alpha?: number;
+    /** 文字的字号（像素）。 */
+    fontSize?: number;
+    /** 图片、加载器的填充方式（不写是不填充）。 */
+    fillMethod?: 'none' | 'horizontal' | 'vertical' | 'radial90' | 'radial180' | 'radial360';
+    /** 图片、加载器的填充比例 0–1。 */
+    fillAmount?: number;
   };
   /** 所在的组（组的元素 ID）。 */
   group?: string | null;
@@ -95,12 +109,16 @@ export interface ComponentDescriptor {
   sound?: string;
   /** 按钮组件自己设的音效音量（0–1，0 是不出声）。 */
   soundVolume?: number;
+  /** 组件自己的轴心（0–1），没写是 (0, 0)；实例上写的优先。 */
+  pivot?: [number, number];
+  /** 按钮组件的按下效果（downEffect、downEffectValue），没写是没有。 */
+  downEffect?: {type: 'dark' | 'scale'; value: number};
   /** [宽, 高]。 */
   size: [number, number];
   /** 控制器。 */
   controllers: {name: string; pages: string[]; selected: string | null}[];
-  /** 动效：名字、放一遍要多少毫秒（-1 是永远放不完）、自动播放、播放次数、自动播放前等多久（毫秒）。 */
-  transitions: {name: string; ms: number; autoPlay: boolean; times: number; delay: number}[];
+  /** 动效：名字、放一遍要多少毫秒（-1 是永远放不完）、自动播放、播放次数、自动播放前等多久（毫秒）；每一项改哪个控件（控件名，组件自己是 null）的哪一类属性。 */
+  transitions: {name: string; ms: number; autoPlay: boolean; times: number; delay: number; items?: {target: string | null; what: TransitionTouch}[]}[];
   /** 组。 */
   groups?: GroupDescriptor[];
   /** 子控件。 */

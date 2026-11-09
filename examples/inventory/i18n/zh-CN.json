@@ -1,6 +1,10 @@
 {
   "lgui.back": "返回",
   "lgui.requestFailed": "请求失败（{code}）",
+  "lgui.time.day": "{n}天",
+  "lgui.time.hour": "{n}小时",
+  "lgui.time.minute": "{n}分",
+  "lgui.time.second": "{n}秒",
   "Common/Confirm/title": "提示",
   "Common/Confirm/cancel": "取消",
   "Common/Confirm/ok": "确定",

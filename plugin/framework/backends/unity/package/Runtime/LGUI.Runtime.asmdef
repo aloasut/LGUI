@@ -1,7 +1,7 @@
 {
   "name": "LGUI.Runtime",
   "rootNamespace": "LGUI",
-  "references": ["FairyGUI", "com.tencent.puerts.core"],
+  "references": ["FairyGUI", "Unity.TextMeshPro", "com.tencent.puerts.core"],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,

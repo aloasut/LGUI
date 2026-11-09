@@ -1,13 +1,22 @@
 // View 基类：一个界面、列表子项、部件。写法见 references/mvc-spec.md 第 6 节。
-import type {UIComponent} from '../core/index';
+import type {UIComponent, UIList, UIObject} from '../core/index';
 import {LgRuntimeError} from '../core/index';
-import type {Bind, ItemBind, Keys, Layer, InputMode} from './types';
+import type {Bind, ItemBind, Keys, Layer, InputMode, TweenOptions, TweenProps} from './types';
 import type {EventDef} from './lgui';
 import {bus} from './events';
 import {Scope} from './scope';
 import {ViewTimers} from './timers';
 import {applyBindings} from './binding/index';
 import {ViewMotion, motionOf} from './binding/transition';
+import {TweenGroup, itemsOf, startTween, stopTweens} from './tween/index';
+import {attachPress} from './tween/press';
+import {fault} from './log';
+
+/** 内部用：一个界面（或部件）的补间组：ItemView 的绑定（按下效果）用所在界面的那份。 */
+export function tweensOf(owner: object): TweenGroup | null {
+  const group = (owner as {__tweens?: unknown}).__tweens;
+  return group instanceof TweenGroup ? group : null;
+}
 
 type Table = Record<string, Record<string, unknown> | undefined>;
 
@@ -19,12 +28,16 @@ abstract class ViewBase<UI> {
   readonly __timers = new ViewTimers(this.__scope);
   /** 内部用：这个界面的动效（被盖住时暂停，关闭时停掉）。 */
   readonly __motion = new ViewMotion();
+  /** 内部用：这个界面的代码补间（被盖住时暂停，关闭时停掉并还原，重建时接到新组件上）。 */
+  readonly __tweens = new TweenGroup();
+  /** 内部用：重建时从旧组件上摘下来、等着接到新组件上的补间。 */
+  private readonly __moving: ReturnType<TweenGroup['capture']> = [];
   /** 内部用：当前绑定的组件。 */
   __component: UIComponent | null = null;
   /** 内部用：当前这一次绑定的清理清单（换版重新绑定时只清这一份）。 */
   private __bindScope: Scope | null = null;
   /** 内部用：这个界面里的部件和列表子项（定时器跟着这个界面暂停、恢复）。 */
-  private readonly __children = new Set<{__timers: ViewTimers}>();
+  private readonly __children = new Set<{__timers: ViewTimers; __tweens?: TweenGroup}>();
   /** 内部用：现在是不是被盖住了。 */
   private __paused = false;
   /** 绑定表（子类覆盖）。 */
@@ -42,7 +55,9 @@ abstract class ViewBase<UI> {
   /** 内部用：绑到一个组件上。已经绑过就先把旧组件的绑定全部清掉（换版时同一个实例重新绑定）。 */
   __mount(component: UIComponent, options: {isActive?: () => boolean; item?: {data: unknown}; owner?: object} = {}): void {
     this.__unmount();
+    const moving = this.__moving.splice(0);
     this.__component = component;
+    this.__tweens.root = component;
     const scope = new Scope();
     this.__bindScope = scope;
     const owner = options.owner ?? this;
@@ -50,26 +65,37 @@ abstract class ViewBase<UI> {
     // 所在的界面正被盖住（换版、列表新出现的子项）：新组件里自动播放的动效也先停着。
     const motion = motionOf(owner);
     if (motion?.isPaused) motion.pause(component);
+    // downEffect="scale" 的按钮：按下与回弹由框架补（用所在界面的补间组，跟着它暂停、停掉）。
+    attachPress(component, tweensOf(owner) ?? this.__tweens, scope);
+    // 最后才接补间：新组件上按路径找不到目标时报错（开发模式抛出），这时绑定都已经接好了；换版的调用方保证别的界面照样换。
+    if (moving.length) {
+      try { this.__tweens.reattach(component, moving, this.constructor.name); } catch (e) { if (e instanceof LgRuntimeError) fault(e); else throw e; }
+    }
   }
 
-  /** 内部用：解绑。 */
+  /** 内部用：解绑。重建（旋转、换语言）时正在走的代码补间按路径记下来，重新挂载到新组件上时接着走。 */
   __unmount(): void {
+    if (this.__component) this.__moving.push(...this.__tweens.capture());
     this.__bindScope?.dispose();
     this.__bindScope = null;
     this.__component = null;
   }
 
-  /** 内部用：彻底清理（解绑、停掉动效、取消定时器和收听）。 */
+  /** 内部用：彻底清理（停掉补间并还原碰过的属性、解绑、停掉动效、取消定时器和收听）。
+   * 补间先停：部件（PartView）的补间也在这里停掉并还原——解绑时部件会先解开（__unmount），那时再停就只剩「摘下来等重建」的了。 */
   __dispose(): void {
+    this.__tweens.dispose();
+    for (const child of this.__children) child.__tweens?.dispose();
     this.__unmount();
+    this.__tweens.drop(this.__moving.splice(0));
     this.__motion.stop();
     this.__scope.dispose();
   }
 
   /** 内部用：登记一个部件或列表子项，它的定时器跟着这个界面暂停、恢复（界面正被盖住时马上暂停）。返回取消登记。 */
-  __adopt(child: {__timers: ViewTimers}): () => void {
+  __adopt(child: {__timers: ViewTimers; __tweens?: TweenGroup}): () => void {
     this.__children.add(child);
-    if (this.__paused) child.__timers.pause();
+    if (this.__paused) { child.__timers.pause(); child.__tweens?.pause(); }
     return () => { this.__children.delete(child); };
   }
 
@@ -77,7 +103,8 @@ abstract class ViewBase<UI> {
   __pause(): void {
     this.__paused = true;
     this.__timers.pause();
-    for (const child of this.__children) child.__timers.pause();
+    this.__tweens.pause();
+    for (const child of this.__children) { child.__timers.pause(); child.__tweens?.pause(); }
     this.__motion.pause(this.__component);
   }
 
@@ -85,8 +112,17 @@ abstract class ViewBase<UI> {
   __resume(): void {
     this.__paused = false;
     this.__motion.resume();
+    this.__tweens.resume();
+    for (const child of this.__children) child.__tweens?.resume();
     this.__timers.resume();
     for (const child of this.__children) child.__timers.resume();
+  }
+
+  /** 内部用：这个界面（含部件）正在跑的补间数（含 roll 和按钮的按下效果），给调试快照用。 */
+  get __tweenCount(): number {
+    let n = this.__tweens.size;
+    for (const child of this.__children) n += child.__tweens?.size ?? 0;
+    return n;
   }
 
   /** 内部用：绑定和清理清单里一共登记了多少项（给调试快照用）。 */
@@ -126,6 +162,13 @@ export abstract class View<UI> extends ViewBase<UI> {
   bind: Bind<UI> = {};
   /** 按键表。 */
   keys: Keys = {};
+
+  /** 补间：把目标（控件或它们的数组）的属性补到终值，放完时 resolve（被停掉、接管、界面关闭时不 resolve）。写法见 mvc-spec「代码补间」。 */
+  protected tween(target: UIObject | readonly UIObject[], to: TweenProps, options: TweenOptions): Promise<void> { return startTween(this.__tweens, this.constructor.name, target, to, options); }
+  /** 停掉补间（不写目标是这个界面的全部）；complete: true 时跳到终值，算放完。 */
+  protected stopTweens(target?: UIObject | readonly UIObject[], options?: {complete?: boolean}): void { stopTweens(this.__tweens, this.constructor.name, target, options); }
+  /** 列表的子项，按序号排好（虚拟列表报错）。 */
+  protected itemsOf(list: UIList): UIComponent[] { return itemsOf(this.__tweens, this.constructor.name, list); }
 }
 
 /** 列表的子项。Data 是这一项的数据类型。 */
@@ -147,6 +190,13 @@ export abstract class PartView<UI> extends ViewBase<UI> {
   static component: string;
   /** 绑定表。 */
   bind: Bind<UI> = {};
+
+  /** 补间：把目标（控件或它们的数组）的属性补到终值，放完时 resolve（被停掉、接管、界面关闭时不 resolve）。写法见 mvc-spec「代码补间」。 */
+  protected tween(target: UIObject | readonly UIObject[], to: TweenProps, options: TweenOptions): Promise<void> { return startTween(this.__tweens, this.constructor.name, target, to, options); }
+  /** 停掉补间（不写目标是这个界面的全部）；complete: true 时跳到终值，算放完。 */
+  protected stopTweens(target?: UIObject | readonly UIObject[], options?: {complete?: boolean}): void { stopTweens(this.__tweens, this.constructor.name, target, options); }
+  /** 列表的子项，按序号排好（虚拟列表报错）。 */
+  protected itemsOf(list: UIList): UIComponent[] { return itemsOf(this.__tweens, this.constructor.name, list); }
 }
 
 const viewStatics = ['component', 'layer', 'fullScreen', 'params', 'result', 'inputMode', 'bothOrientations', 'music'];

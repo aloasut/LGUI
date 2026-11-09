@@ -77,8 +77,75 @@ export interface WheelGesture {
   dy: number;
 }
 
+/** 缓动名：和 ui/ 的 XML 一样（ease="Quad.Out"），对应 FairyGUI 的 31 个 EaseType（不含 Custom）。 */
+export type Ease =
+  | 'Linear'
+  | 'Sine.In' | 'Sine.Out' | 'Sine.InOut' | 'Quad.In' | 'Quad.Out' | 'Quad.InOut'
+  | 'Cubic.In' | 'Cubic.Out' | 'Cubic.InOut' | 'Quart.In' | 'Quart.Out' | 'Quart.InOut'
+  | 'Quint.In' | 'Quint.Out' | 'Quint.InOut' | 'Expo.In' | 'Expo.Out' | 'Expo.InOut'
+  | 'Circ.In' | 'Circ.Out' | 'Circ.InOut' | 'Elastic.In' | 'Elastic.Out' | 'Elastic.InOut'
+  | 'Back.In' | 'Back.Out' | 'Back.InOut' | 'Bounce.In' | 'Bounce.Out' | 'Bounce.InOut';
+
+/** 代码补间的属性（this.tween 的终值、选项里的 from）。只有 dx、dy 是相对 ui/ 里位置的偏移，其余都是绝对值。 */
+export interface TweenProps {
+  /** 横向偏移（设计尺寸的像素），0 是 ui/ 里的位置。 */
+  dx?: number;
+  /** 纵向偏移（设计尺寸的像素），0 是 ui/ 里的位置。 */
+  dy?: number;
+  /** 缩放倍数，等于同时写 scaleX 和 scaleY（不能和它们写在一起）。 */
+  scale?: number;
+  /** 横向缩放倍数。 */
+  scaleX?: number;
+  /** 纵向缩放倍数。 */
+  scaleY?: number;
+  /** 旋转（度）。 */
+  rotation?: number;
+  /** 透明度 0–1（中间值夹在 0–1）。 */
+  alpha?: number;
+  /** 宽（设计尺寸的像素），会重新排版。 */
+  width?: number;
+  /** 高（设计尺寸的像素），会重新排版。 */
+  height?: number;
+  /** 颜色 #rrggbb：文字的字色；按钮、标签的标题颜色；图片、加载器、序列帧的着色（白色是原色）；图形的填充色。 */
+  color?: string;
+  /** 字号（像素，每帧取整）：文字；按钮、标签的标题。会重新排版。 */
+  fontSize?: number;
+  /** 填充比例 0–1：图片、加载器（ui/ 里要先设了填充方式）。 */
+  fillAmount?: number;
+  /** 进度条的值 0–100。 */
+  progress?: number;
+  /** 显示到第几个字（打字机，每帧向下取整）：文字；按钮、标签的标题。 */
+  chars?: number;
+}
+
+/** 代码补间的选项。 */
+export interface TweenOptions {
+  /** 毫秒，必填；有重复时是一轮的时长。 */
+  duration: number;
+  /** 缓动，默认 'Quad.Out'。 */
+  ease?: Ease;
+  /** 毫秒，只在开头等一次；目标是数组时可以按序号算。 */
+  delay?: number | ((index: number) => number);
+  /** 起点：调用时马上生效，在 delay 之前。 */
+  from?: TweenProps;
+  /** 再重复几次，-1 一直循环。 */
+  repeat?: number;
+  /** 重复时来回走（第 2、4、6… 轮倒着走）。 */
+  yoyo?: boolean;
+}
+
+/** 绑定的 roll：数值从旧值平滑滚到新值。 */
+export interface RollOptions {
+  /** 毫秒。 */
+  duration: number;
+  /** 缓动，默认 'Quad.Out'。 */
+  ease?: Ease;
+}
+
 /** 所有控件都能用的词。 */
 export interface CommonBinding {
+  /** 每隔这么多毫秒重新算一遍这一项的显示值（倒计时），结果变了才写；被盖住时不算，露出来马上算一次。 */
+  tick?: number;
   /** 是否显示。 */
   visible?: Value<boolean>;
   /** 是否可用；false 时变灰、不可点。 */
@@ -117,6 +184,8 @@ export interface CommonBinding {
 export interface TextBinding extends CommonBinding {
   /** 显示的文字。 */
   text?: Value<string>;
+  /** 数字平滑滚动：text 的 pick 取出数字，格式化函数每帧对滚动中的数字调用一次。不能写在 ItemView 里。 */
+  roll?: RollOptions;
 }
 
 /** 输入框。 */
@@ -129,6 +198,8 @@ export interface InputBinding extends TextBinding {
 export interface LabelBinding extends CommonBinding {
   /** 标题。 */
   text?: Value<string>;
+  /** 数字平滑滚动：text 的 pick 取出数字。不能写在 ItemView 里。 */
+  roll?: RollOptions;
   /** 图标地址。 */
   icon?: Value<string>;
   /** 交给一个部件 View（按钮、标签做成的部件，比如货币栏、弹窗边框）。 */
@@ -153,6 +224,8 @@ export interface LoaderBinding extends CommonBinding {
 export interface ProgressBinding extends CommonBinding {
   /** 0–100。 */
   progress?: Value<number>;
+  /** 进度平滑滚动。不能写在 ItemView 里。 */
+  roll?: RollOptions;
 }
 
 /** 滑动条。 */
@@ -252,10 +325,10 @@ export type Bind<UI> = {[K in Exclude<keyof UI, '__component'>]?: BindingFor<UI[
 export type ItemValue<Data, T> = T | ((item: Data) => T);
 
 /** ItemView 里原样写的词（不是显示类的值）。 */
-type ItemKeep = 'visibleOn' | 'placeholder' | 'lockWhilePending' | 'drop' | 'drag' | 'swipe' | 'pinch' | 'wheel' | 'hover' | 'input' | 'change' | 'select' | 'view' | 'item' | 'key' | 'done';
+type ItemKeep = 'visibleOn' | 'placeholder' | 'lockWhilePending' | 'drop' | 'drag' | 'swipe' | 'pinch' | 'wheel' | 'hover' | 'input' | 'change' | 'select' | 'view' | 'item' | 'key' | 'done' | 'tick';
 
-/** 把一种绑定里的 Value 换成 ItemValue；点击、双击、长按的动作参数是这一项的数据；红点路径可以按这一项算。 */
-type ForItem<B, Data> = {[K in keyof B]:
+/** 把一种绑定里的 Value 换成 ItemValue；点击、双击、长按的动作参数是这一项的数据；红点路径可以按这一项算；roll 不能写（子项会被重复使用，认不出旧值）。 */
+type ForItem<B, Data> = {[K in keyof B as K extends 'roll' ? never : K]:
   K extends 'click' | 'doubleClick' ? Action<[Data]> :
   K extends 'hold' ? {ms: number; action: Action<[Data]>} :
   K extends 'redDot' ? ItemValue<Data, string> :

@@ -7,6 +7,7 @@ MyGame/
 ├── ui/                        # 界面：FairyGUI 工程，界面资源和预制结构只在这里改
 │   ├── UI.fairy               #   工程文件
 │   ├── assets/                #   各个界面包（组件 XML、图片）
+│   ├── fonts/                 #   项目字体 <名字>.ttf|.otf（可选；文件名就是字体名，生成时自动精简，见 UI 开发规范第 8 节）
 │   └── art-src/               #   AI 生成的原始大图：只作来源，界面不引用，不进游戏包
 ├── src/                       # 游戏代码，按 MVC 开发规范写
 │   ├── main.ts                #   入口：选后端（默认 h5），启动游戏
@@ -44,7 +45,7 @@ MyGame/
 | `requestTimeoutMs` | 正整数（毫秒） | `10000` | `lgui.request` 的超时时间 |
 | `placeholder` | `ui://` 开头的图片地址 | `"ui://Common/placeholder"` | 默认占位图 |
 | `sounds` | `{ click: 音效地址 \| null }` | `{ click: null }` | 按钮的默认点击音效（`ui://<包>/<声音名>`）：`ui/` 里按钮没写音效时用；`null` 表示不放 |
-| `defaultFont` | 字体名 \| `null` | `null` | 默认字体，`null` 表示用 FairyGUI 的默认字体 |
+| `defaultFont` | 字体名 \| `null` | `null` | 默认字体：写 `ui/fonts/` 里某个字体的名字（文件名去掉扩展名）；`null` 表示用系统默认字体。写了 `ui/fonts/` 里没有的名字（包括系统字体名）报 `LGUI-CLI-142` |
 | `devPort` | 端口号 1–65535 | `4173` | `lgui dev` 的端口 |
 | `devWatch` | 路径数组 | `[]` | `lgui dev` 除了 `ui/`、`src/`、`i18n/` 以外还要监视的目录或文件，相对工程根目录（比如宿主代码、仓库根的 `["../Config"]`），改了就重新打包、刷新页面（不监视 `.lgui/build/`，写成工程根目录也不会自己触发自己）。路径不存在时报 `LGUI-CLI-116` |
 | `editorPort` | 端口号 1–65535 | `4174` | `lgui editor` 的端口。浏览器按地址（含端口）记住授权过的 `ui/` 文件夹，所以端口固定；改了端口要在编辑器里重新授权。被占用时报 `LGUI-CLI-110` |

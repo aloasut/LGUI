@@ -141,7 +141,7 @@ You don't need a game engine to build with it, and what you build isn't tied to 
 | :-- | :-- | :-- | :-- |
 | Web (h5) | Daily work, preview, screenshot checks | Chrome or Edge | Ready |
 | Headless | Tests in Node, including CI | Node 24 | Ready |
-| Unity | Shipping builds (Editor, Windows IL2CPP Player) | Unity 6000.6.x + PuerTS Core/V8 3.0.3 | Connected; the 0.3.0 API is being checked in Unity |
+| Unity | Shipping builds (Editor, Windows IL2CPP Player) | Unity 6000.6.x + PuerTS Core/V8 3.0.3 | Connected; the 0.4.0 API is being checked in Unity |
 | Other engines | Cocos Creator, LayaAir, Unreal and others | An adapter for the `lgui` backend interface | Possible, not built yet |
 
 The UI format is FairyGUI, which has official runtimes for Unity, Cocos Creator, LayaAir, Unreal and other engines. Adding an engine is mostly writing the adapter; screens and game code stay the same.

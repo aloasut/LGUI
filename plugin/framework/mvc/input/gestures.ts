@@ -37,6 +37,8 @@ export interface GestureHandlers {
   hover?: (inside: boolean) => void;
   /** 每次按下时调用，参数是指针类型（给输入类型判断用）。 */
   pointer?: (event: PointerInput) => void;
+  /** 按下（true）和不再按着（false：松开、取消、移动超过点击的范围开始拖动或滑动、两指缩放）。按钮的按下效果用它。 */
+  press?: (down: boolean) => void;
 }
 
 interface Track {
@@ -63,6 +65,8 @@ export function recognize(object: UIObject, input: InputService, time: TimeServi
   let inside = false;
   let lastOwnEvent: PointerInput | null = null;
   let stopHold: (() => void) | null = null;
+  let pressing = false;
+  const release = (): void => { if (pressing) { pressing = false; handlers.press?.(false); } };
 
   const endHold = (): void => {
     if (stopHold) { stopHold(); stopHold = null; handlers.hold?.progress?.(0); }
@@ -70,6 +74,7 @@ export function recognize(object: UIObject, input: InputService, time: TimeServi
 
   const reset = (): void => {
     endHold();
+    release();
     tracks.clear();
     primary = null;
     moved = dragging = holdDone = pinching = false;
@@ -92,6 +97,7 @@ export function recognize(object: UIObject, input: InputService, time: TimeServi
       if (primary === null) {
         primary = e.pointerId;
         moved = dragging = holdDone = false;
+        if (handlers.press) { pressing = true; handlers.press(true); }
         const hold = handlers.hold;
         if (hold) {
           const start = e.time;
@@ -104,7 +110,7 @@ export function recognize(object: UIObject, input: InputService, time: TimeServi
         }
       } else if (handlers.pinch && tracks.size === 2) {
         const p = pair();
-        if (p) { pinchBase = distance(p[0], p[1]) || 1; pinching = true; endHold(); handlers.pinch({phase: 'start', scale: 1}); }
+        if (p) { pinchBase = distance(p[0], p[1]) || 1; pinching = true; endHold(); release(); handlers.pinch({phase: 'start', scale: 1}); }
       }
     }
   };
@@ -130,7 +136,7 @@ export function recognize(object: UIObject, input: InputService, time: TimeServi
     }
     if (e.pointerId !== primary) return;
     const dx = e.x - track.startX, dy = e.y - track.startY;
-    if (!moved && Math.hypot(dx, dy) > thresholds.tapMove) { moved = true; endHold(); }
+    if (!moved && Math.hypot(dx, dy) > thresholds.tapMove) { moved = true; endHold(); release(); }
     if (e.type === 'move') {
       if (!dragging && handlers.drag && Math.hypot(dx, dy) > thresholds.dragStart) { dragging = true; handlers.drag({phase: 'start', x: e.x, y: e.y, dx, dy}); }
       else if (dragging) handlers.drag?.({phase: 'move', x: e.x, y: e.y, dx, dy});

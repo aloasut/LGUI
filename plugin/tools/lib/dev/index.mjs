@@ -11,6 +11,7 @@ import {generateProjectTypes, generateWeb, uiProjectPath} from '../generate/inde
 import {buildDir} from '../paths.mjs';
 import {readUiModel} from '../generate/model.mjs';
 import {generateTranslations} from '../generate/i18n.mjs';
+import {generateFonts} from '../generate/fonts.mjs';
 import {bundleErrors, createWebContext, writeWebBootstrap} from './bundle.mjs';
 import {openInBrowser} from '../browser.mjs';
 import {copyFramework} from '../commands/init.mjs';
@@ -53,10 +54,13 @@ export async function startDev(root, project, {port = project.devPort, log = () 
 
   // 1. 生成界面包、类型、包依赖；2. 写启动入口；3. 打包。都放在 .lgui/build/dev/。
   const site = buildDir(root, 'dev');
+  // 项目字体的子集（ui/fonts/）：字集来自 ui/ 和 i18n/，所以两边改了都重新生成。
+  const fonts = () => generateFonts(root, project, readUiModel(uiProjectPath(root)), path.join(site, 'ui', 'fonts'), 'woff2');
   const generateUi = async () => {
     await generateWeb(uiProjectPath(root), path.join(site, 'ui'));
     await generateProjectTypes(root, {validated: true});
     translations();
+    await fonts();
   };
   const translations = () => generateTranslations(root, readUiModel(uiProjectPath(root)), project.languages, path.join(site, 'i18n'), project.defaultLanguage);
   let context = null;
@@ -129,14 +133,15 @@ export async function startDev(root, project, {port = project.devPort, log = () 
   let timer = null;
   let closed = false;
   let inflight = Promise.resolve();
-  let pending = {ui: false, code: false};
+  let pending = {ui: false, text: false, code: false};
   const flush = () => { inflight = inflight.then(flushNow); return inflight; };
   const flushNow = async () => {
     timer = null;
     if (closed) return;
-    const {ui, code} = pending;
-    pending = {ui: false, code: false};
+    const {ui, text, code} = pending;
+    pending = {ui: false, text: false, code: false};
     if (ui) await run(async () => { await generateUi(); await bundle(); }, '重新生成界面');
+    else if (text) await run(async () => { await fonts(); await bundle(); }, '重新打包');
     else if (code) await run(bundle, '重新打包');
   };
   // 生成物都在 .lgui/build/ 里：devWatch 写成工程根目录或它的上级时会监视到这里，不跳过的话打包写盘又触发打包，一直循环。
@@ -153,7 +158,7 @@ export async function startDev(root, project, {port = project.devPort, log = () 
   };
   watch(path.join(root, 'ui'), 'ui');
   watch(path.join(root, 'src'), 'code');
-  watch(path.join(root, 'i18n'), 'code');
+  watch(path.join(root, 'i18n'), 'text');
   for (const e of extra) watch(e.dir, 'code');
 
   return {

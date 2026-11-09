@@ -2,6 +2,6 @@
 <component size="720,96">
   <displayList>
     <graph id="n0" name="bg" xy="0,0" size="720,96" type="rect" lineSize="0" fillColor="#cc000000"/>
-    <text id="n1" name="text" xy="24,0" size="672,96" fontSize="28" color="#ffffff" align="center" vAlign="middle" autoSize="shrink" singleLine="true" text=""/>
+    <text id="n1" name="text" xy="24,0" size="672,96" text="" fontSize="28" color="#ffffff" align="center" vAlign="middle" autoSize="shrink" singleLine="true"/>
   </displayList>
 </component>

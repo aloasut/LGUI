@@ -4,6 +4,8 @@ Unity 6000.6 的 embedded package（`com.lumiogames.lgui`）。包含 C# 启动�
 
 FairyGUI 除 `Assets/Scripts` 外，还包含同一固定提交必需的 Image、Text、BMFont 三个 shader，位于 `FairyGUI/Resources/Shaders/`；保留原 `.meta` 和许可。放入 Resources 以便 Unity 将它们纳入 Player。仅复制 C# 源码会缺少这三个 shader，使上游改用 `UI/Default`；这不能算正确的 LGUI 渲染。Unity 自带的 `UnityCG.cginc` 不随包复制。
 
+**项目字体用 TextMesh Pro。** `FairyGUI/FairyGUI.asmdef` 在装了 `com.unity.ugui`（2.0.0 起自带 TextMesh Pro）时定义 `FAIRYGUI_TMPRO`，FairyGUI 的 `TMPFont` 才会编译；这是对上游唯一的改动，台账在 LGUI 仓库的 `plugin/framework/backends/unity/PATCHES.md`。`LGUI.Platform.RegisterFont` 用 `lgui unity export` 写进 `Assets/LGUI/Resources/UI/fonts/` 的精简字体建动态 TMP 字体（字第一次出现时才画进图集，满了开新图集），包成 `TMPFont` 按字体名注册，后面挂一个系统字体建的 TMP 回退字体。`Runtime/Resources/LGUI/` 里的两份材质只为让出包时带上 FairyGUI 的 TMP shader 和投影用的 `UNDERLAY_ON` 变体。
+
 先按 PuerTS 官方说明准备 3.0.3 的 Core 和 V8 本地包。LGUI 不分发或安装 PuerTS。包的 UGUI 依赖提供 FairyGUI 所需的 TextMeshPro 程序集。
 
 启动场景挂 `LGUI.LGUIBoot`。它从 `Resources.Load<TextAsset>("Game/game.js")` 读取 `Assets/LGUI/Resources/Game/game.js.txt`：Unity 导入文本时只剥掉最后的 `.txt`，实际 TextAsset 名称保留 `.js`。之后调用脚本的 `globalThis.__lguiStart()`，每帧先 `JsEnv.Tick()` 再通知 TypeScript。退出前先取消 TypeScript 监听、停止原生异步请求，再释放环境。脚本需提供 `__lguiFrame(deltaMs)`、`__lguiVisibility(visible)`、`__lguiDispose()` 生命周期钩子。`debugPort` 默认 `-1`；只有显式启用时才开放 PuerTS 调试器。

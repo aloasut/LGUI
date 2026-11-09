@@ -113,7 +113,7 @@ const fgui = {
 const context = (x, y, touchId = -1) => ({inputEvent: {x, y, touchId, button: 0}, data: null, CaptureTouch() { this.captured = true; }});
 
 let backendImplementation;
-async function containerBackend() {
+async function containerBackend({platform = {}, fonts, defaultFont = null} = {}) {
   backendImplementation ??= await importTs(fileURLToPath(new URL('../../../plugin/framework/backends/unity/adapter/index.ts', import.meta.url)));
   class NativeComponent extends Component {
     disposeCalls = 0;
@@ -136,11 +136,11 @@ async function containerBackend() {
     FairyGUI: {...fgui, GComponent: NativeComponent, GRoot: {inst: new NativeComponent()},
       Stage: {touchScreen: false, inst: stage}, UIConfig: {defaultFont: ''},
       UIPackage: {...fgui.UIPackage, GetByName() { return {}; }, CreateObject() { return new NativeComponent(); }}},
-    LGUI: {Platform: {Now: 0, ScreenWidth: 1280, ScreenHeight: 720}, LGUIResourceLoader: Loader}
+    LGUI: {Platform: {Now: 0, ScreenWidth: 1280, ScreenHeight: 720, ...platform}, LGUIResourceLoader: Loader}
   };
   const backend = backendImplementation.createUnityBackend(bridge);
-  await backend.init({projectName: 'containers', defaultFont: null, uiBase: 'UI'});
-  return {backend, dispose: () => globalThis.__lguiDispose?.()};
+  await backend.init({projectName: 'containers', defaultFont, fonts, uiBase: 'UI'});
+  return {backend, bridge, dispose: () => globalThis.__lguiDispose?.()};
 }
 
 test('Unity wrappers preserve object identity, nested lookup and native ownership', async () => {
@@ -469,4 +469,83 @@ test('Unity container teardown disposes a registered parent tree and remaining l
     assert.equal(child.native.disposeCalls, 1, 'registered child must not be disposed a second time after native recursion');
     assert.equal(sibling.native.disposeCalls, 1, 'removing parent/child ownership must not skip another live container');
   } finally { dispose(); }
+});
+
+test('Unity 项目字体：启动时按名字把 Resources 里的 UI/fonts/<名字> 注册成 TMP 字体；找不到、旧版 Unity 包都报 LGUI-RT-181', async () => {
+  const calls = [];
+  const logs = [];
+  const {bridge, dispose} = await containerBackend({defaultFont: 'Noto', fonts: ['Noto', 'Title'], platform: {
+    RegisterFont(name, resource) { calls.push([name, resource]); return true; }, TmpSettingsFound: true, FallbackFontName: 'PingFang SC', FallbackFontCandidates: 'PingFang SC, Microsoft YaHei',
+    Log(level, message) { logs.push([level, message]); }
+  }});
+  assert.deepEqual(calls, [['Noto', 'UI/fonts/Noto'], ['Title', 'UI/fonts/Title']]);
+  assert.equal(bridge.FairyGUI.UIConfig.defaultFont, 'Noto');
+  assert.deepEqual(logs.filter(([, m]) => m.includes('lgui_rt_182')), [], '找到了系统回退字体就不记');
+  dispose();
+  await assert.rejects(containerBackend({fonts: ['Noto'], platform: {RegisterFont: () => false, TmpSettingsFound: true}}), e => e.code === 'LGUI-RT-181' && /Resources\/UI\/fonts\/Noto/.test(e.message));
+  dispose();
+  await assert.rejects(containerBackend({fonts: ['Noto']}), e => e.code === 'LGUI-RT-181' && /RegisterFont/.test(e.message));
+  dispose();
+  // 工程里没有 TMP Settings（没导入 TMP Essential Resources）：不调 RegisterFont（TMP 会空引用），报 RT-181 写明原因和改法
+  const tried = [];
+  await assert.rejects(containerBackend({fonts: ['Noto'], platform: {RegisterFont(name) { tried.push(name); return true; }, TmpSettingsFound: false}}),
+    e => e.code === 'LGUI-RT-181' && /TMP Settings/.test(e.message) && /lgui unity export/.test(e.next) && /Window → TextMeshPro → Import TMP Essential Resources/.test(e.next));
+  assert.deepEqual(tried, []);
+  dispose();
+  // 没有项目字体时不调 RegisterFont（旧版 Unity 包照样能启动），也不管系统回退字体（不记 RT-182）
+  const quiet = [];
+  await containerBackend({platform: {FallbackFontName: '', FallbackFontCandidates: 'x', Log(level, message) { quiet.push(message); }}});
+  assert.deepEqual(quiet.filter(m => m.includes('lgui_rt_182')), []);
+  dispose();
+});
+
+test('Unity 项目字体：一个系统回退字体都没找到时，启动照常，只记一次 LGUI-RT-182 错误日志（写明试过哪些）', async () => {
+  const logs = [];
+  const {backend, dispose} = await containerBackend({fonts: ['Noto', 'Title'], platform: {
+    RegisterFont: () => true, TmpSettingsFound: true, FallbackFontName: '', FallbackFontCandidates: 'PingFang SC, Noto Sans CJK SC, Microsoft YaHei',
+    Log(level, message) { logs.push([level, message]); }
+  }});
+  assert.ok(backend.root, '启动照常');
+  const rt182 = logs.filter(([, m]) => m.includes('lgui_rt_182'));
+  assert.equal(rt182.length, 1, '两个项目字体也只记一次');
+  assert.equal(rt182[0][0], 'error');
+  assert.match(rt182[0][1], /LGUI-RT-182/);
+  assert.match(rt182[0][1], /PingFang SC, Noto Sans CJK SC, Microsoft YaHei/);
+  dispose();
+});
+
+test('Unity 代码补间：属性读写、齿轮主人、按钮按下效果（关掉 FairyGUI 自己的缩放）、动效每一项，走 FairyGUI 和 LGUI.Platform（TweenInfo.cs）', async () => {
+  const calls = [];
+  const services = {
+    ...noServices,
+    gearController: (object, index) => object.name === 'geared' && index === 2 ? 'tabs' : '',
+    downEffect: () => ({type: 2, value: 0.8}),
+    disableDownEffect: button => calls.push(['disable', button.name]),
+    transitionItems: () => [{target: image, type: 4}, {target: image, type: 9}, {target: null, type: 0}]
+  };
+  const a = await adapter(fgui, () => 0, (x, y) => ({x, y}), undefined, services);
+  const look = {scaleX: 1, scaleY: 1, rotation: 0, alpha: 1, pivotX: 0.5, pivotY: 0.5, isDisposed: false, SetScale(x, y) { this.scaleX = x; this.scaleY = y; }};
+  const text = Object.assign(new Text(), look, {name: 'price', textFormat: {size: 20}});
+  const image = Object.assign(new Image(), look, {name: 'geared', fillMethod: 4});
+  const button = Object.assign(new Button(), look, {name: 'claim', titleColor: {r: 0, g: 0, b: 0, a: 1}, titleFontSize: 24, GetTextField: () => text});
+  const t = a.wrap(text), i = a.wrap(image), b = a.wrap(button);
+  assert.deepEqual([t.supports('color'), t.supports('fontSize'), t.supports('fillAmount'), i.supports('fillAmount'), i.supports('fontSize'), b.supports('color')], [true, true, false, true, false, true]);
+  t.setProp('color', 0xff3b30);
+  t.setProp('fontSize', 30);
+  assert.deepEqual([t.getProp('color'), text.textFormat.size, t.pivot], [0xff3b30, 30, {x: 0.5, y: 0.5}]);
+  i.setProp('alpha', 0.5);
+  i.setProp('x', 12);
+  assert.deepEqual([image.alpha, image.x], [0.5, 12]);
+  assert.deepEqual([i.ownerOf('scaleX'), i.ownerOf('alpha'), t.ownerOf('width')], ['齿轮 gearSize（控制器 tabs）', null, null]);
+  assert.deepEqual(b.downEffect, {type: 'scale', value: 0.8});
+  assert.deepEqual(b.downEffect, {type: 'scale', value: 0.8});
+  assert.deepEqual(calls, [['disable', 'claim']], '第一次读时关掉一次');
+  b.pressScale = 0.8;
+  assert.deepEqual([button.scaleX, button.scaleY], [0.8, 0.8]);
+  b.pressScale = 1;
+  assert.deepEqual([button.scaleX, b.pressScale], [1, 1]);
+  const transition = {name: 'blink', playing: false, Play() {}, Stop() {}, SetPaused() {}};
+  const owner = Object.assign(new Component(), {name: 'panel'});
+  owner.transitions.set('blink', transition);
+  assert.deepEqual(a.wrapComponent(owner).transition('blink').touches().map(x => [x.target.name, x.what]), [['geared', 'alpha']], 'Sound 这类项、没有目标的项不算');
 });

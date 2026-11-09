@@ -7,7 +7,7 @@
       <gearDisplay controller="button" pages="1,3"/>
     </graph>
     <loader id="n1" name="icon" xy="36,20" size="128,128" align="center" vAlign="middle" fill="scale"/>
-    <text id="n2" name="label" xy="8,150" size="184,40" fontSize="24" color="#d8e2f0" align="center" vAlign="middle" autoSize="ellipsis" singleLine="true" text=""/>
+    <text id="n2" name="label" xy="8,150" size="184,40" text="" fontSize="24" color="#d8e2f0" align="center" vAlign="middle" autoSize="ellipsis" singleLine="true"/>
   </displayList>
   <Button mode="Radio"/>
 </component>

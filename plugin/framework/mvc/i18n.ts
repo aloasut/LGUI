@@ -3,6 +3,7 @@
 import {LgRuntimeError} from '../core/index';
 import {hasRuntime} from './runtime';
 import {fault} from './log';
+import {compactUnits} from './fixed-text';
 
 /** 一种语言的文本表。 */
 export type TextTable = Record<string, string | Partial<Record<PluralForm, string>>>;
@@ -76,14 +77,7 @@ const groups = (n: number): string => {
 const pad = (n: number): string => String(n).padStart(2, '0');
 
 // 数字缩写的规则（三端都用这一套，不用 Intl：各浏览器、Unity 的脚本环境的 Intl 不一样，同一个数要各端显示一样）：
-// 中文、日文、韩文按万、亿、万亿（兆、조），其余按千（K）、百万（M）、十亿（B）、万亿（T），最多一位小数。
-function compactUnits(language: string): [number, string][] {
-  if (/^zh-(TW|HK|MO|Hant)/i.test(language)) return [[1e12, '兆'], [1e8, '億'], [1e4, '萬']];
-  if (/^zh\b/i.test(language)) return [[1e12, '万亿'], [1e8, '亿'], [1e4, '万']];
-  if (/^ja\b/i.test(language)) return [[1e12, '兆'], [1e8, '億'], [1e4, '万']];
-  if (/^ko\b/i.test(language)) return [[1e12, '조'], [1e8, '억'], [1e4, '만'], [1e3, '천']];
-  return [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
-}
+// 单位见 fixed-text.ts 的 compactUnits（生成字体子集时要收这些字），最多一位小数。
 const oneDecimal = (n: number): number => Math.round(n * 10) / 10;
 function compact(value: number, language: string): string {
   if (!Number.isFinite(value)) return String(value);
@@ -104,6 +98,29 @@ function compact(value: number, language: string): string {
   return sign + String(shown) + suffix;
 }
 
+// 时长：向上取整到秒，负数当 0。clock 是 05:09，满 1 小时是 1:02:03；units 取最大的两个单位（第二个是 0 就不写），
+// 单位的写法是框架文本键 lgui.time.day / hour / minute / second（和 lgui.back 一样放在每种语言的文本表里），三端一样，不用 Intl。
+const TIME_UNITS: [number, string][] = [[86400, 'lgui.time.day'], [3600, 'lgui.time.hour'], [60, 'lgui.time.minute'], [1, 'lgui.time.second']];
+function duration(ms: number, style: 'clock' | 'units'): string {
+  const total = Math.max(0, Math.ceil((Number.isFinite(ms) ? ms : 0) / 1000));
+  if (style === 'clock') {
+    const h = Math.floor(total / 3600), m = Math.floor(total % 3600 / 60), s = total % 60;
+    return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+  }
+  const first = TIME_UNITS.findIndex(([size]) => total >= size);
+  const parts: string[] = [];
+  if (first < 0) parts.push(t('lgui.time.second', {n: 0}));
+  else {
+    const [size, key] = TIME_UNITS[first];
+    parts.push(t(key, {n: Math.floor(total / size)}));
+    const next = TIME_UNITS[first + 1];
+    const rest = next ? Math.floor(total % size / next[0]) : 0;
+    if (next && rest > 0) parts.push(t(next[1], {n: rest}));
+  }
+  // 中文、日文、韩文连着写（1天2小时），其余用空格隔开（1d 2h）。
+  return parts.join(/^(zh|ja|ko)\b/i.test(state.language) ? '' : ' ');
+}
+
 /** 按当前语言格式化数字、数字缩写、日期、货币。数字、日期、货币有 Intl 时用它，没有时用内置实现（千分位、固定的日期格式）；数字缩写三端都用内置规则。 */
 export const format = {
   /** 数字，带千分位。 */
@@ -120,6 +137,15 @@ export const format = {
   },
   /** 数字缩写，按当前语言：中文 1.6万、1.2亿，英文 16.3K、1.2M；最多一位小数，不到缩写的单位时原样显示（中文 9999、英文 999）。三端都用内置规则，不用 Intl。 */
   compact(value: number): string { return compact(value, state.language); },
+  /** 时长（毫秒，向上取整到秒，负数当 0）：'clock'（默认）是 05:09，满 1 小时是 1:02:03；'units' 取最大的两个单位，比如 1天2小时、5分9秒（单位按当前语言的文本键 lgui.time.*）。 */
+  duration(ms: number, style: 'clock' | 'units' = 'clock'): string {
+    // 写法不认识：开发模式抛出；正式构建记 error 日志，按 clock 显示。
+    if (style !== 'clock' && style !== 'units') {
+      fault(new LgRuntimeError('LGUI-RT-285', `format.duration 的写法 ${String(style)} 不认识。`, "写 'clock'（05:09）或 'units'（1天2小时）。"), {style}, `duration:${String(style)}`);
+      return duration(ms, 'clock');
+    }
+    return duration(ms, style);
+  },
   /** 货币，currency 是 ISO 代码（CNY、USD）。 */
   currency(value: number, currency: string): string {
     const NumberFormat = intl()?.NumberFormat;

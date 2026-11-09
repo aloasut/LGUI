@@ -141,7 +141,7 @@ LGUI 是 [LumioGames](https://lumio.games/) 出品的游戏 UI 框架，给 AI A
 | :-- | :-- | :-- | :-- |
 | 网页（h5） | 日常开发、预览、截图验收 | Chrome 或 Edge | 可用 |
 | headless | 在 Node 里跑测试，也能放进 CI | Node 24 | 可用 |
-| Unity | 出包上线（Editor、Windows IL2CPP Player） | Unity 6000.6.x + PuerTS Core/V8 3.0.3 | 已接入，0.3.0 新接口在 Unity 里验收中 |
+| Unity | 出包上线（Editor、Windows IL2CPP Player） | Unity 6000.6.x + PuerTS Core/V8 3.0.3 | 已接入，0.4.0 新接口在 Unity 里验收中 |
 | 其他引擎 | Cocos Creator、LayaAir、Unreal 等 | 按 `lgui` 的后端接口写一个适配层 | 可以接，还没做 |
 
 界面格式用的是 FairyGUI，它在 Unity、Cocos Creator、LayaAir、Unreal 等引擎上都有官方运行库。所以接新引擎主要是写适配层，界面和游戏代码都不用动。

@@ -49,6 +49,7 @@ sh('git', ['apply', path.join(patches, 'agent-session.patch')], src);
 sh('git', ['apply', path.join(patches, 'rebrand.patch')], src);
 sh('git', ['apply', path.join(patches, 'project-reload.patch')], src);
 sh('git', ['apply', path.join(patches, 'cross-package-image.patch')], src);
+sh('git', ['apply', path.join(patches, 'atlas-default.patch')], src);
 sh('git', ['apply', path.join(patches, 'rebrand-ui.patch')], path.join(src, 'vendor', 'FairyGUI-Editor'));
 fs.copyFileSync(path.join(here, 'brand', 'logo128.png'), path.join(src, 'vendor', 'FairyGUI-Editor', 'ui', 'assets', 'Builder', 'icons', 'logo128.png'));
 
@@ -65,7 +66,7 @@ fs.writeFileSync(path.join(out, 'VERSION.md'), `# 编辑器版本
 
 - 上游：${UPSTREAM.replace(/\.git$/, '')}
 - 提交：\`${COMMIT}\`
-- LGUI 的改动：\`scripts/build-editor/patches/\`（实时会话中转、换品牌、重新读 ui/、跨包图片）和 \`scripts/build-editor/brand/logo128.png\`。
+- LGUI 的改动：\`scripts/build-editor/patches/\`（实时会话中转、换品牌、重新读 ui/、跨包图片、图集上限默认值）和 \`scripts/build-editor/brand/logo128.png\`。
 
 许可见同目录的 \`LICENSE\`、\`THIRD_PARTY_NOTICES.md\`、\`TRADEMARKS.md\`。
 `);

@@ -269,10 +269,23 @@ export class UIManager {
     component.visible = !entry.covered;
     component.touchable = entry.active;
     (this.containers.get(entry.layer) as UIComponent).addChild(component);
-    entry.view.__mount(component, {isActive: () => entry.active && entry.state === 'open'});
-    restoreLists(component, lists);
-    old.dispose();
-    this.reorder();
+    // 新组件绑定时报错（比如补间在新版里按路径找不到目标）也把换版做完：旧组件照样释放、层里照样排好。
+    try {
+      entry.view.__mount(component, {isActive: () => entry.active && entry.state === 'open'});
+    } finally {
+      restoreLists(component, lists);
+      old.dispose();
+      this.reorder();
+    }
+  }
+
+  /** 每个界面各换各的：一个界面换版时出错不挡住别的界面，全部换完再把第一个错误抛出去。 */
+  private each(entries: readonly Entry[], run: (entry: Entry) => void): void {
+    let failure: {error: unknown} | null = null;
+    for (const entry of entries) {
+      try { run(entry); } catch (error) { if (!failure) failure = {error}; }
+    }
+    if (failure) throw failure.error;
   }
 
   /** 换过的组件是后加进去的，按栈的顺序重新排一遍，层内的上下关系不变。只调整顺序：已经在层里的界面移到最上面，不离开舞台
@@ -287,8 +300,11 @@ export class UIManager {
   /** 内部用：换语言后重建所有打开的界面（和旋转同一套机制），清空界面缓存。 */
   rebuildAll(): void {
     this.clearCache();
-    for (const entry of this.all()) if (entry.state === 'open' && entry.component) this.swap(entry, entry.version);
-    this.updateHints();
+    try {
+      this.each(this.all(), entry => { if (entry.state === 'open' && entry.component) this.swap(entry, entry.version); });
+    } finally {
+      this.updateHints();
+    }
   }
 
   /** 内部用：现在就按屏幕尺寸判方向并换版（平时由尺寸变化触发，测试里可以直接调用）。 */
@@ -300,15 +316,21 @@ export class UIManager {
     this.orientation = next;
     orientationState.current = next;
     this.visible = this.backend.platform.screen.applyDesignSize(this.design());
-    for (const entry of this.all()) {
-      if (entry.state !== 'open' || !entry.component) continue;
-      const version = this.versionOf(entry.cls);
-      if (version !== entry.version) this.swap(entry, version);
-      else this.place(entry, entry.component);
-      if (changed) this.hook(entry, 'onOrientationChange', next);
+    try {
+      this.each(this.all(), entry => {
+        if (entry.state !== 'open' || !entry.component) return;
+        const version = this.versionOf(entry.cls);
+        try {
+          if (version !== entry.version) this.swap(entry, version);
+          else this.place(entry, entry.component);
+        } finally {
+          if (changed) this.hook(entry, 'onOrientationChange', next);
+        }
+      });
+    } finally {
+      this.updateHints();
+      if (changed) bus.emit(builtinEvents.orientationChange, {orientation: next});
     }
-    this.updateHints();
-    if (changed) bus.emit(builtinEvents.orientationChange, {orientation: next});
   }
 
   // ---------- 资源：按需加载界面包（连同它依赖的包），记录有几个界面在用 ----------
@@ -674,7 +696,7 @@ export class UIManager {
   }
 
   /** 内部用：每个界面的监听和定时器数量。 */
-  views(): {name: string; listeners: number; timers: number}[] {
-    return this.all().filter(e => e.state === 'open').map(e => ({name: e.cls.name, listeners: e.view.__listeners, timers: e.view.__timers.size}));
+  views(): {name: string; listeners: number; timers: number; tweens: number}[] {
+    return this.all().filter(e => e.state === 'open').map(e => ({name: e.cls.name, listeners: e.view.__listeners, timers: e.view.__timers.size, tweens: (e.view as {__tweenCount?: number}).__tweenCount ?? 0}));
   }
 }

@@ -17,6 +17,7 @@ node scripts/build-editor/build.mjs
    - `patches/rebrand.patch`（编辑器源码）和 `patches/rebrand-ui.patch`（界面工程，打在子模块 `vendor/FairyGUI-Editor` 里）：换品牌，见下表。
    - `patches/project-reload.patch`：由 `lgui editor` 打开时（`127.0.0.1`、`?agent=1`），每次都从 `/__lgui_editor/project` 读工程的 `ui/` 重新导入，不用浏览器里存的旧副本；已经绑定过的文件夹保留，保存时照样写回 `ui/`。原因见 [CONTRIBUTING.md](../../CONTRIBUTING.md) 的「编辑器实测」。
    - `patches/cross-package-image.patch`：编辑器读写跨包图片（`<image pkg="…" src="…">`）时不丢 `pkg`。改的是编辑器仓库里提交好的后端 `assets/resources/editor/runtime/openfairygui-backend-browser.js`（OpenFairyGUI 0.2.4 打出来的包，vite 原样复制进产物）：读进来（`liftDisplayNode`）时保留图片的 `packageId`，写回去（`materializeDisplayNode`）时写回 `pkg`，去掉「不支持跨包图片」的事务检查（`unsupported_cross_package_image_ref`）。原来读进来就丢了 `pkg`，判定工程「不能无损保存」（`uam_fidelity_unsupported`），整个工程都存不了。跨包子组件写 `fileName` 的情况没改，仍然存不了（`lgui check` 警告 `LGUI-UI-020`）。
+   - `patches/atlas-default.patch`：「发布设置」对话框里图集上限的默认值和 LGUI 一致（4096）。上游没写全局 `atlasSetting.maxSize` 时显示 2048，点「确定」就把 2048 写进 `ui/settings/Publish.json`，LGUI 会把它当成用户写的上限（为了改别的发布选项打开过一次，1080×2600 的背景就报 `LGUI-CLI-113`）。改成没写时显示 4096；用全局设置的包显示全局的上限（编辑器后端读包时自己填 2048）。改的是 `src/editor/dialogs/PublishSettingsEditor.ts`，要重新 `vite build`。
    - 用 `brand/logo128.png`（源文件 `brand/logo.svg`）换掉界面工程里的 Logo。
 4. 从换过品牌的界面工程重新发布编辑器界面包（`npm run publish:editor-ui`），类型检查，`vite build`。
 5. 产物复制到 `plugin/editor/`（去掉 LayaAir 的 `.meta` 文件），连同编辑器原有的 `LICENSE`、`THIRD_PARTY_NOTICES.md`、`TRADEMARKS.md`，再写 `VERSION.md`。

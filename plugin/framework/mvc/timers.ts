@@ -11,19 +11,22 @@ export class ViewTimers {
   private timers = new Set<Timer>();
   private stopFrames: (() => void) | null = null;
   private paused = false;
+  /** 露出来时马上调用一次（绑定的 tick：被盖住时不重算，露出来显示就要是对的）。 */
+  private resumed = new Set<() => void>();
 
   constructor(private readonly scope: Scope) {}
 
   /** 当前有几个定时器（给调试快照用）。 */
   get size(): number { return this.timers.size; }
 
-  private add(timer: Timer): void {
-    if (this.scope.isClosed) return;
+  private add(timer: Timer): () => void {
+    if (this.scope.isClosed) return () => {};
     this.timers.add(timer);
     if (!this.stopFrames) {
       const off = runtime().backend.platform.time.onFrame(dt => this.frame(dt));
-      this.stopFrames = this.scope.add(() => { off(); this.timers.clear(); this.stopFrames = null; });
+      this.stopFrames = this.scope.add(() => { off(); this.timers.clear(); this.resumed.clear(); this.stopFrames = null; });
     }
+    return () => { this.timers.delete(timer); };
   }
 
   // 一个定时器出错不耽误同一界面的其他定时器：这一帧都跑完，再把第一个错误抛出去。
@@ -43,10 +46,17 @@ export class ViewTimers {
     this.add({step: dt => { if (fired) return false; elapsed += dt; if (elapsed < ms) return true; fired = true; handler(); return false; }});
   }
 
-  /** 每隔 ms 毫秒执行一次。一帧里跨过好几个间隔（比如切回前台）只执行一次，不补发。 */
-  every(ms: number, handler: () => void): void {
+  /** 每隔 ms 毫秒执行一次。一帧里跨过好几个间隔（比如切回前台）只执行一次，不补发。返回取消（框架内部用）。 */
+  every(ms: number, handler: () => void): () => void {
     let elapsed = 0;
-    this.add({step: dt => { elapsed += dt; if (elapsed >= ms) { elapsed %= ms; handler(); } return true; }});
+    return this.add({step: dt => { elapsed += dt; if (elapsed >= ms) { elapsed %= ms; handler(); } return true; }});
+  }
+
+  /** 内部用：绑定的 tick——每隔 ms 毫秒调用一次，露出来时马上再调用一次。返回取消。 */
+  tick(ms: number, handler: () => void): () => void {
+    const stop = this.every(ms, handler);
+    this.resumed.add(handler);
+    return () => { stop(); this.resumed.delete(handler); };
   }
 
   /** 倒计时：每次都按「结束时间 − 现在」算。开始时和剩余秒数变化时调用 tick，到点调用 done（出错也只调用这一次）。 */
@@ -78,5 +88,6 @@ export class ViewTimers {
   resume(): void {
     this.paused = false;
     this.frame(0);
+    for (const handler of [...this.resumed]) handler();
   }
 }

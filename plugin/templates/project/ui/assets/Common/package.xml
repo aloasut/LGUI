@@ -10,6 +10,8 @@
     <component id="reddot01" name="RedDot.xml" path="/" exported="true"/>
     <component id="holdprg1" name="HoldProgress.xml" path="/" exported="true"/>
     <component id="arttext1" name="ArtText.xml" path="/" exported="true"/>
-    <image id="placehd1" name="placeholder.png" path="/" exported="true"/>
+    <image id="placehd1" name="placeholder.png" path="/" exported="true" width="64" height="64"/>
   </resources>
+  <publish name="Common">
+  </publish>
 </packageDescription>

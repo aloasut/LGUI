@@ -1,6 +1,6 @@
 {
   "name": "com.lumiogames.lgui",
-  "version": "0.3.0",
+  "version": "0.4.2",
   "displayName": "LGUI",
   "description": "LGUI runtime host and FairyGUI for shared TypeScript UI.",
   "unity": "6000.6",

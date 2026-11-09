@@ -39,7 +39,7 @@ export async function loadFramework({production = false} = {}) {
 }
 
 /** 框架自己用到的文本键（lgui init 的文本表里都有）。 */
-export const frameworkTexts = {'lgui.back': '返回', 'lgui.requestFailed': '请求失败（{code}）'};
+export const frameworkTexts = {'lgui.back': '返回', 'lgui.requestFailed': '请求失败（{code}）', 'lgui.time.day': '{n}天', 'lgui.time.hour': '{n}小时', 'lgui.time.minute': '{n}分', 'lgui.time.second': '{n}秒'};
 
 // 用 fixture（或给定工程根目录）的 headless 描述建一个后端，并设成当前运行时。
 export async function headless({root = writeFixture(), config = {}, production = false} = {}) {

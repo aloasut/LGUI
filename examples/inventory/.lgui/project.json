@@ -1,6 +1,6 @@
 {
   "name": "inventory",
-  "lguiVersion": "0.3.0",
+  "lguiVersion": "0.4.2",
   "designSize": {
     "landscape": {
       "width": 1920,
@@ -75,5 +75,5 @@
   "devPort": 4173,
   "backend": "h5",
   "unityProject": null,
-  "cocosProject": "../../../../../../../tmp/lgui-exp-real/cc"
+  "cocosProject": null
 }

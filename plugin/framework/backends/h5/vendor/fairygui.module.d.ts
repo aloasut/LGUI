@@ -30,6 +30,19 @@ export class GObject extends EventDispatcher {
   readonly internalVisible2: boolean;
   readonly packageItem: PackageItem | null;
   readonly element: HTMLElement;
+  scaleX: number;
+  scaleY: number;
+  rotation: number;
+  alpha: number;
+  readonly pivotX: number;
+  readonly pivotY: number;
+  readonly isDisposed: boolean;
+  /** 齿轮（上游没有公开的读法，读内部字段）：0 Display、1 XY、2 Size、3 Look、4 Color、5 Animation、6 Text、7 Icon、8 Display2、9 FontSize。 */
+  readonly _gears: ({controller: Controller | null} | undefined)[];
+  setScale(scaleX: number, scaleY: number): void;
+  /** ObjectPropID：2 Color（数字 0xrrggbb）、8 FontSize。 */
+  getProp(index: number): unknown;
+  setProp(index: number, value: unknown): void;
   setPosition(x: number, y: number): void;
   setSize(width: number, height: number): void;
   dispose(): void;
@@ -47,6 +60,7 @@ export class GComponent extends GObject {
   addChild(child: GObject): GObject;
   removeChild(child: GObject, dispose?: boolean): GObject;
   ensureBoundsCorrect(): void;
+  getChildById(id: string): GObject | null;
 }
 
 export class GRoot extends GComponent {
@@ -72,6 +86,8 @@ export class GButton extends GComponent {
   readonly mode: number;
   sound: string | null;
   soundVolumeScale: number;
+  /** 标题文字控件，没有时是 null。 */
+  getTextField(): GTextField | null;
 }
 
 export class GImage extends GObject {
@@ -118,6 +134,8 @@ export class GList extends GComponent {
 export class GLabel extends GComponent {
   title: string | null;
   icon: string | null;
+  /** 标题文字控件，没有时是 null。 */
+  getTextField(): GTextField | null;
 }
 
 export class GSlider extends GComponent {
@@ -135,6 +153,7 @@ export class GComboBox extends GComponent {
 export class GMovieClip extends GObject {
   playing: boolean;
   frame: number;
+  color: number;
 }
 
 export class GTreeNode {
@@ -178,6 +197,9 @@ export class Transition {
   play(onComplete?: () => void, times?: number, delay?: number): void;
   stop(setToComplete?: boolean, processCallback?: boolean): void;
   setPaused(paused: boolean): void;
+  /** 动效所在的组件和每一项（上游没有公开的读法，读内部字段）。type 是 ActionType：0 XY、1 Size、2 Scale、4 Alpha、5 Rotation、6 Color、11 Shake、14 Text…… */
+  readonly _owner: GComponent;
+  readonly _items: {type: number; targetId: string | null; target: GObject | null}[];
 }
 
 export class PackageItem {
