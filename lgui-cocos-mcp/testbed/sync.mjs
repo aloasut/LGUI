@@ -30,7 +30,9 @@ console.log(`翻译：${project.languages.join('、')} → assets/lgui-ui/i18n/`
   const frameworkTarget = path.join(testbed, 'assets', 'lgui-framework');
   fs.rmSync(frameworkTarget, {recursive: true, force: true});
   for (const part of ['index.ts', 'env.d.ts', 'core', 'mvc', 'backends/cocos']) {
-    fs.cpSync(path.join(repo, 'plugin', 'framework', part), path.join(frameworkTarget, part), {recursive: true});
+    // project-template 是导出模板（Boot/场景），不是框架源码——混进去会在 Creator 编译时报模块解析错误，
+    // 并中断 assets 拷贝阶段（产物只剩 src/，index.html 缺失；T009 实机、T008 testbed 双双实测）。
+    fs.cpSync(path.join(repo, 'plugin', 'framework', part), path.join(frameworkTarget, part), {recursive: true, filter: src => !src.includes('project-template')});
   }
 }
 console.log('框架：assets/lgui-framework/');

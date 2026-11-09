@@ -338,7 +338,8 @@ export class UIManager {
   private packagesOf(pkg: string, seen = new Set<string>()): string[] {
     if (seen.has(pkg)) return [];
     seen.add(pkg);
-    return [...(this.deps[pkg] ?? []).flatMap(dep => this.packagesOf(dep, seen)), pkg];
+    const chain = Array.from(this.deps[pkg] ?? []).flatMap(dep => this.packagesOf(dep, seen));
+    return [...chain, pkg];
   }
 
   private async acquire(packages: string[]): Promise<void> {

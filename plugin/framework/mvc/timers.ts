@@ -88,6 +88,6 @@ export class ViewTimers {
   resume(): void {
     this.paused = false;
     this.frame(0);
-    for (const handler of [...this.resumed]) handler();
+    for (const handler of Array.from(this.resumed)) handler();
   }
 }

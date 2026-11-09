@@ -257,7 +257,7 @@ class Engine {
 
   private frame(dt: number): void {
     let failure: {error: unknown} | null = null;
-    for (const tween of [...this.tweens]) {
+    for (const tween of Array.from(this.tweens)) {
       if (tween.ended || tween.group.paused) continue;
       try { this.step(tween, dt); } catch (error) { this.end(tween, false); if (!failure) failure = {error}; }
     }
@@ -335,7 +335,7 @@ export function completeTweensUnder(list: UIObject): void {
   const r = runtime();
   const e = engines.get(r);
   if (!e) return;
-  for (const tween of [...e.tweens]) {
+  for (const tween of Array.from(e.tweens)) {
     if (tween.kind !== 'code') continue;
     if (tween.channels.some(c => { for (let o: UIObject | null = c.object.parent; o; o = o.parent) if (o === list) return true; return false; })) e.complete(tween);
   }
@@ -372,7 +372,7 @@ export class TweenGroup {
   /** 停掉 stopTweens 管的补间（代码放的），targets 不给是全部；complete 时跳到终值并 resolve。 */
   stop(targets: readonly UIObject[] | null, complete: boolean): void {
     const e = engine();
-    for (const tween of [...this.tweens]) {
+    for (const tween of Array.from(this.tweens)) {
       if (tween.kind !== 'code') continue;
       if (targets && !tween.channels.some(c => targets.includes(c.object))) continue;
       if (complete) e.complete(tween); else e.end(tween, false);
@@ -382,7 +382,7 @@ export class TweenGroup {
   /** 关闭：全部停掉（不 resolve），碰过的属性还原成 ui/ 里的值（界面可能被缓存，下次打开要是原样）。 */
   dispose(): void {
     const e = engine();
-    for (const tween of [...this.tweens]) e.end(tween, false);
+    for (const tween of Array.from(this.tweens)) e.end(tween, false);
     for (const object of this.touched) {
       const origins = e.origins.get(object);
       // 位置、尺寸还原成关联现在算出来的原位，不写回旧的。
@@ -405,7 +405,7 @@ export class TweenGroup {
     const e = engine();
     const moving: Moving[] = [];
     const root = this.root;
-    for (const tween of [...this.tweens]) {
+    for (const tween of Array.from(this.tweens)) {
       const object = tween.channels[0]?.object;
       const steps = root && object && tween.kind === 'code' ? pathOf(root, object) : null;
       if (!steps) { e.end(tween, false); continue; }
